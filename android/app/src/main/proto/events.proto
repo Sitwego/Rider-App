@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.transli.mobilitycustomer.rides.notification";
+
+package rides_notification;
+
+// Driver Location change notification message
+message DriverLocationChange {
+  string entity_id = 1;
+  string ride_id = 2;
+  double latitude = 3;
+  double longitude = 4;
+  int64 timestamp = 5; // Unix timestamp
+  float accuracy = 6;
+  float speed = 7;
+  float bearing = 8;
+}
+
+// Message for location change request
+message LocationChangeRequest {
+  string ride_id = 1;
+}
+
+// rpc for watching location changes
+service WatchLocationService {
+  // Bi-directional streaming RPC for driver location changes based on ride ID
+  rpc WatchDriverLocationChanges(stream LocationChangeRequest) returns (stream DriverLocationChange);
+}

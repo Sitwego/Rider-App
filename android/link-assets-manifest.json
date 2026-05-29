@@ -1,0 +1,141 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "assets/fonts/babble.ttf",
+      "sha1": "bf152aee9ca71d660f4a83dcf7784761f35ed130"
+    },
+    {
+      "path": "assets/fonts/ConfigAltBlack.ttf",
+      "sha1": "63780777cd2807704a45368e7a8ed88cb8284b75"
+    },
+    {
+      "path": "assets/fonts/ConfigAltBlackItalic.ttf",
+      "sha1": "18738b4ac628d92e9815c21ceb87879cc738d764"
+    },
+    {
+      "path": "assets/fonts/ConfigAltBold.ttf",
+      "sha1": "719c2236e635b8a4551e14ac31322b41a806942a"
+    },
+    {
+      "path": "assets/fonts/ConfigAltBoldItalic.ttf",
+      "sha1": "92aa535b11b8dc5edabb716f29c6ea0e32183f26"
+    },
+    {
+      "path": "assets/fonts/ConfigAltExtraBold.ttf",
+      "sha1": "804dd8fb83c85faa452eaee71777d5ed409fc393"
+    },
+    {
+      "path": "assets/fonts/ConfigAltExtraBoldItalic.ttf",
+      "sha1": "b6a692f8f69970fa9bc6fbc3cde9b3cbb8896e69"
+    },
+    {
+      "path": "assets/fonts/ConfigAltExtraLight.ttf",
+      "sha1": "b47508ecc28da7e65ece6ad5c8b4649cbe0ca171"
+    },
+    {
+      "path": "assets/fonts/ConfigAltExtraLightItalic.ttf",
+      "sha1": "ba4d6c72c4ef3e5b18699746ed0bb49559065592"
+    },
+    {
+      "path": "assets/fonts/ConfigAltItalic.ttf",
+      "sha1": "371ce7729afcfec002bf337837402b4faeff5df2"
+    },
+    {
+      "path": "assets/fonts/ConfigAltLight.ttf",
+      "sha1": "c5982d085aa753b4d27636c92b76a4d7cc0ae4fd"
+    },
+    {
+      "path": "assets/fonts/ConfigAltLightItalic.ttf",
+      "sha1": "33cf1d25bde4ea38c32bff2fd853dd6e2a9da6b9"
+    },
+    {
+      "path": "assets/fonts/ConfigAltMedium.ttf",
+      "sha1": "9590ff2ba4af2fa754dc89d986ce6fe7f4f35ca8"
+    },
+    {
+      "path": "assets/fonts/ConfigAltMediumItalic.ttf",
+      "sha1": "b0d90c684bf9b982639714092af2b8458eca0095"
+    },
+    {
+      "path": "assets/fonts/ConfigAltRegular.ttf",
+      "sha1": "59fd7a44abb11cd870e529cb70ab06945817af39"
+    },
+    {
+      "path": "assets/fonts/ConfigAltSemiBold.ttf",
+      "sha1": "0a4f5d30662307271023f7fae83559497bff13f9"
+    },
+    {
+      "path": "assets/fonts/ConfigAltSemiBoldItalic.ttf",
+      "sha1": "478f68f8ecb507e08b8e7754de42dffae3bd92c1"
+    },
+    {
+      "path": "assets/fonts/ConfigAltText.ttf",
+      "sha1": "49230bcd94d1457021bd1f49cbf2c667aa2e801a"
+    },
+    {
+      "path": "assets/fonts/ConfigAltTextItalic.ttf",
+      "sha1": "c854c3fcaa42e6783972528acd9cbbe084bbecb3"
+    },
+    {
+      "path": "assets/fonts/ConfigAltThin.ttf",
+      "sha1": "4106e17ec46c6970b12d653c773e4cea54e28134"
+    },
+    {
+      "path": "assets/fonts/ConfigAltThinItalic.ttf",
+      "sha1": "9914a5bf2777e01e637f1025c4911854902b902b"
+    },
+    {
+      "path": "assets/fonts/Inter-Medium.ttf",
+      "sha1": "f2e3f4b0c02fc2c0c3223aa0d5e4dfc32a266b45"
+    },
+    {
+      "path": "assets/fonts/Inter-Regular.ttf",
+      "sha1": "c47afdca3b107b58fc636380e94d78f2c664a5af"
+    },
+    {
+      "path": "assets/fonts/Lato-Black.ttf",
+      "sha1": "a001eb827743636e04f8efa7d4aeedf0541c46ac"
+    },
+    {
+      "path": "assets/fonts/Lato-BlackItalic.ttf",
+      "sha1": "b490ec02c69bb74f5b4f487c59e984891c8da71c"
+    },
+    {
+      "path": "assets/fonts/Lato-Bold.ttf",
+      "sha1": "542498221d97bee5bdbccf86ee8890bf8e8005c9"
+    },
+    {
+      "path": "assets/fonts/Lato-BoldItalic.ttf",
+      "sha1": "6bf491e78e16d3b9c8a55752e1bd658e15ed7f19"
+    },
+    {
+      "path": "assets/fonts/Lato-Italic.ttf",
+      "sha1": "190187b720ec2f2ff2e4281237e301000e09673f"
+    },
+    {
+      "path": "assets/fonts/Lato-Light.ttf",
+      "sha1": "ad0d178564445a535b15d417f5b18019923d3bab"
+    },
+    {
+      "path": "assets/fonts/Lato-LightItalic.ttf",
+      "sha1": "34388d9a3b64380c9f08d424d0adaa88a0d1650a"
+    },
+    {
+      "path": "assets/fonts/Lato-Regular.ttf",
+      "sha1": "e923c72eda5e50a87e18ff5c71e9ef4b3b6455a3"
+    },
+    {
+      "path": "assets/fonts/Lato-Thin.ttf",
+      "sha1": "07290446bee3f81ce501a3c3dbfde6097c70ca15"
+    },
+    {
+      "path": "assets/fonts/Lato-ThinItalic.ttf",
+      "sha1": "ff4a1a9fe2dcc41d993f4c5067a3baa1c456ff97"
+    },
+    {
+      "path": "assets/fonts/OFL.txt",
+      "sha1": "dced1a41948e9968f9026cbc7ddabbf88e65423b"
+    }
+  ]
+}
