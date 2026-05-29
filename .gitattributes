@@ -1,0 +1,47 @@
+# Normalize all text files to LF in the repo and on checkout.
+* text=auto eol=lf
+
+# Explicitly LF for common source/text types
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.gradle text eol=lf
+*.kt    text eol=lf
+*.java  text eol=lf
+*.proto text eol=lf
+*.xml   text eol=lf
+*.svg   text eol=lf
+*.sh    text eol=lf
+*.properties text eol=lf
+.gitignore   text eol=lf
+.gitattributes text eol=lf
+
+# Windows-specific scripts keep CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Treat these as binary (never convert line endings)
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.mp3   binary
+*.mp4   binary
+*.lottie binary
+*.json.gz binary
+*.keystore binary
+*.jks   binary
+*.aab   binary
+*.apk   binary
+*.jar   binary
