@@ -48,6 +48,7 @@ type CategoriesType =
   | "Comfort"
   | "Xl"
   | "Bike"
+  | "Auto"
   | "Executive";
 
 const CATEGORY_IMAGES: Record<CategoriesType, number> = {
@@ -56,14 +57,38 @@ const CATEGORY_IMAGES: Record<CategoriesType, number> = {
   Comfort: require("../../../assets/images/comfort_ca_ic.png"),
   Xl: require("../../../assets/images/xl_ca_ic.png"),
   Bike: require("../../../assets/images/ny_ic_bike_left_side.png"),
+  Auto: require("../../../assets/images/ny_ic_auto.png"),
   Executive: require("../../../assets/images/excutive_ca_ic.png"),
 };
+
+type CategoryMeta = {
+  seats: number;
+  features: string;
+};
+
+// TODO: vehicle features (seats, AC, etc.) should come from the DB —
+// drivers will set these per vehicle. Remove this static map once the
+// backend returns features on EstimatesType. AC intentionally omitted
+// here since not all vehicles have it.
+const CATEGORY_META: Record<CategoriesType, CategoryMeta> = {
+  Swift: { seats: 4, features: "Affordable" },
+  Standard: { seats: 4, features: "Everyday rides" },
+  Comfort: { seats: 4, features: "Extra Legroom" },
+  Xl: { seats: 6, features: "Extra Spacious" },
+  Bike: { seats: 1, features: "Quick & Affordable" },
+  Auto: { seats: 3, features: "Quick, Affordable & Spacious" },
+  Executive: { seats: 4, features: "Premium" },
+};
+
+const DEFAULT_CATEGORY_META: CategoryMeta = CATEGORY_META.Swift;
 
 const RenderItem = memo(({ item, onCategorySelect, selected }: ItemType) => {
   const { colors } = useAppTheme();
   const categoryImage =
     CATEGORY_IMAGES[item.category as CategoriesType] ??
     CATEGORY_IMAGES["Swift"];
+  const categoryMeta =
+    CATEGORY_META[item.category as CategoriesType] ?? DEFAULT_CATEGORY_META;
   return (
     <RNPressable
       onPress={() => onCategorySelect(item.category)}
@@ -102,12 +127,12 @@ const RenderItem = memo(({ item, onCategorySelect, selected }: ItemType) => {
                 strokeWidth={1}
               />
               <RnText style={[atoms.text_2xs, { color: colors.gray_50 }]}>
-                6
+                {categoryMeta.seats}
               </RnText>
             </RnView>
             <Icon name="Dot" color={colors.gray_50} size={14} strokeWidth={2} />
             <RnText style={[atoms.text_2xs, { color: colors.gray_100 }]}>
-              Ac, Extra Spacious
+              {categoryMeta.features}
             </RnText>
           </RnView>
         </RnView>

@@ -100,8 +100,8 @@ android {
         applicationId 'com.transli.mobilitycustomer'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 33
-        versionName "0.0.18-alpha"
+        versionCode 36
+        versionName "0.0.21-alpha"
         manifestPlaceholders = [GOOGLE_MAPS_API_KEY: project.env.get("GOOGLE_MAPS_API_KEY") ?: ""]
     }
     externalNativeBuild {

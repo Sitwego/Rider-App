@@ -26,11 +26,16 @@ import type { UpdatePolicy } from "./utils/inAppUpdates";
 // stable reference identity across renders (avoids re-running the
 // fetchPolicy effect when App re-renders).
 //
-// `minSupportedVersion` should ALWAYS be lower than the live store
-// version; otherwise users on the latest build will see the forced
-// blocker because remote config hasn't loaded yet.
+// CRITICAL: `minSupportedVersion` must ALWAYS be <= the version currently
+// installed on devices in the wild. If it is higher (e.g. "1.0.0" while the
+// app ships as "0.0.18-alpha"), `_resolveMode` treats every install as
+// "below minimum" and shows the forced-update blocker on every cold start.
+//
+// Leaving it undefined means "no hard minimum" — only an explicit
+// forceUpdate flag or a newer store build will trigger a prompt. Raise
+// minSupportedVersion only via remote config once the matching build has
+// been live for 24h+.
 const STATIC_UPDATE_POLICY: UpdatePolicy = {
-  minSupportedVersion: "1.0.0",
   forceUpdate: false,
 };
 
