@@ -1,3 +1,11 @@
+import {
+  Host,
+  TextField,
+  Text as ComposeText,
+  useNativeState,
+  type TextFieldRef,
+} from "@expo/ui/jetpack-compose";
+import { fillMaxWidth } from "@expo/ui/jetpack-compose/modifiers";
 import Qs from "qs";
 // import { v4 as uuidv4 } from "uuid";
 import React, {
@@ -5,7 +13,6 @@ import React, {
   useEffect,
   useImperativeHandle,
   useRef,
-  useState,
   useCallback,
   useMemo,
   SetStateAction,
@@ -14,7 +21,6 @@ import { Platform, StyleSheet, View } from "react-native";
 import { useDebouncedCallback } from "use-debounce";
 
 import { borderRadius } from "~/constants/styles-token";
-import RnTextInput, { AnimatedTextInputRef } from "~/ui/RnTextInput";
 import { useAppTheme } from "~/ui/theme";
 import { atoms } from "~/ui/theme/atoms";
 
@@ -138,8 +144,11 @@ export const GooglePlacesAutocomplete = forwardRef<
   const _requestsRef = useRef<XMLHttpRequest[]>([]);
 
   const { colors, fonts } = useAppTheme();
-  const [stateText, setStateText] = useState("");
-  const inputRef = useRef<AnimatedTextInputRef>(null);
+  // Native observable state shared between JS and the Jetpack Compose TextField.
+  // It is the single source of truth for the field's displayed value.
+  const textState = useNativeState("");
+  const inputRef = useRef<TextFieldRef>(null);
+  const isFocusedRef = useRef(false);
 
   // Derive url directly instead of useState + useEffect to avoid an extra render cycle
   const url = useMemo(() => {
@@ -173,13 +182,21 @@ export const GooglePlacesAutocomplete = forwardRef<
 
   useImperativeHandle(ref, () => ({
     setAddressText: (address: SetStateAction<string>) => {
-      setStateText(address);
+      const next =
+        typeof address === "function" ? address(textState.get()) : address;
+      textState.set(next);
+      // Place the caret at the end of the newly set text (e.g. after a
+      // location is picked) instead of leaving it where the user last was.
+      inputRef.current?.setSelection(next.length, next.length);
     },
-    getAddressText: () => stateText,
+    getAddressText: () => textState.get(),
     blur: () => inputRef.current?.blur(),
     focus: () => inputRef.current?.focus(),
-    isFocused: () => !!inputRef.current?.isFocused(),
-    clear: () => inputRef.current?.clear(),
+    isFocused: () => isFocusedRef.current,
+    clear: () => {
+      inputRef.current?.clear();
+      textState.set("");
+    },
   }));
 
   const supportedPlatform = useCallback(() => {
@@ -241,7 +258,7 @@ export const GooglePlacesAutocomplete = forwardRef<
         };
 
         if (preProcess) {
-          setStateText(preProcess(text));
+          textState.set(preProcess(text));
         }
 
         if (isNewPlacesAPI) {
@@ -292,6 +309,7 @@ export const GooglePlacesAutocomplete = forwardRef<
       query,
       requestUrl,
       requestShouldUseWithCredentials,
+      textState,
     ],
   );
 
@@ -304,9 +322,10 @@ export const GooglePlacesAutocomplete = forwardRef<
   }, [debounceData]);
 
   const onChangeTextProp = textInputProps?.onChangeText;
-  const _handleChangeText = useCallback(
-    (text: any) => {
-      setStateText(text);
+  // The native TextField already writes the new value into `textState`, so we
+  // only need to kick off the debounced request and notify the consumer.
+  const _handleValueChange = useCallback(
+    (text: string) => {
       debounceData(text);
       onChangeTextProp?.(text);
     },
@@ -328,15 +347,25 @@ export const GooglePlacesAutocomplete = forwardRef<
     [renderRightButton],
   );
 
-  // Guard against undefined textInputProps to prevent destructuring crash
-  const {
-    onFocus,
-    onBlur,
-    onChangeText: _onChangeText, // destructuring stops this overriding onChangeText={_handleChangeText}
-    clearButtonMode,
-    InputComp,
-    ...userProps
-  } = textInputProps ?? {};
+  // Guard against undefined textInputProps to prevent destructuring crash.
+  // Only focus/blur are bridged to the Compose TextField; the remaining RN
+  // TextInput props are not forwarded since they don't map to a native view.
+  const { onFocus, onBlur } = textInputProps ?? {};
+
+  // The Compose TextField reports focus through a single boolean callback
+  // instead of the RN focus/blur event pair.
+  const _handleFocusChanged = useCallback(
+    (focused: boolean) => {
+      isFocusedRef.current = focused;
+      if (focused) {
+        onFocus?.(undefined as any);
+      } else {
+        _onBlur();
+        onBlur?.(undefined as any);
+      }
+    },
+    [onFocus, onBlur, _onBlur],
+  );
 
   return (
     <React.Fragment>
@@ -366,34 +395,52 @@ export const GooglePlacesAutocomplete = forwardRef<
           ]}
         >
           {_renderLeftButton()}
-          <RnTextInput
-            ref={inputRef}
-            style={[
-              suppressDefaultStyles ? {} : defaultStyles.textInput,
-              propStyles?.textInput,
-              atoms.text_sm,
-              {
-                backgroundColor: colors.gray_50,
+          <Host
+            style={defaultStyles.textInput}
+            matchContents={{ vertical: true }}
+          >
+            <TextField
+              ref={inputRef}
+              value={textState}
+              singleLine
+              autoFocus={false}
+              modifiers={[fillMaxWidth()]}
+              keyboardOptions={{
+                autoCorrectEnabled: false,
+                capitalization: "none",
+              }}
+              textStyle={{
+                ...atoms.text_sm,
                 color: colors.text,
                 fontFamily: fonts.medium.fontFamily,
-              },
-            ]}
-            value={stateText}
-            autoComplete="off"
-            placeholder={placeholder}
-            onFocus={(e) => onFocus?.(e)}
-            onBlur={
-              onBlur
-                ? (e) => {
-                    _onBlur(e);
-                    onBlur(e);
-                  }
-                : _onBlur
-            }
-            clearButtonMode={clearButtonMode || "while-editing"}
-            onChangeText={_handleChangeText}
-            {...userProps}
-          />
+              }}
+              colors={{
+                focusedContainerColor: "rgba(15, 36, 36, 0.05)",
+                unfocusedContainerColor: "rgba(15, 36, 36, 0.05)",
+                focusedIndicatorColor: "transparent",
+                unfocusedIndicatorColor: "transparent",
+                cursorColor: colors.text,
+                focusedPlaceholderColor: colors.gray_300,
+                unfocusedPlaceholderColor: colors.gray_300,
+              }}
+              onValueChange={_handleValueChange}
+              onFocusChanged={_handleFocusChanged}
+            >
+              {placeholder ? (
+                <TextField.Placeholder>
+                  <ComposeText
+                    color={colors.gray_300}
+                    style={{
+                      ...atoms.text_sm,
+                      fontFamily: fonts.medium.fontFamily,
+                    }}
+                  >
+                    {placeholder}
+                  </ComposeText>
+                </TextField.Placeholder>
+              ) : null}
+            </TextField>
+          </Host>
           {_renderRightButton()}
         </View>
       )}

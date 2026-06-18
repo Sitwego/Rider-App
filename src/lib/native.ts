@@ -7,8 +7,8 @@ const nativeBridgeEventEmitter = new NativeEventEmitter(SitwegoMainModule);
 const { start, stop, startOfferingRideEvent, stopOfferingRideEvent } =
   SitwegoMainModule;
 
-const strartWatchingLocationChanges = () => {
-  start();
+const strartWatchingLocationChanges = (rideId: string) => {
+  start(rideId);
 };
 
 const stopWatchingLocationChanges = () => {

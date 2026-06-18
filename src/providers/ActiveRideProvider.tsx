@@ -132,7 +132,20 @@ const reducers = (state: ActiveRideState, action: Action): ActiveRideState => {
     }
     case "UPDATE-ACTIVE-RIDE": {
       const baseMerged = action.data.rideData
-        ? { ...state.rideData, ...action.data.rideData }
+        ? {
+            ...state.rideData,
+            ...action.data.rideData,
+            // Deep-merge ride_polyline: per-tick location updates only carry
+            // from_to (the shrinking remainder), and a shallow spread would
+            // wipe the sibling driver_to_pickup_polyline that the map renders
+            // and projects onto during the Accepted (heading-to-pickup) phase.
+            ride_polyline: action.data.rideData.ride_polyline
+              ? {
+                  ...state.rideData?.ride_polyline,
+                  ...action.data.rideData.ride_polyline,
+                }
+              : state.rideData?.ride_polyline,
+          }
         : state.rideData;
 
       // When ride_start_time arrives, snap frozen_wait_elapsed so WaitingTimer

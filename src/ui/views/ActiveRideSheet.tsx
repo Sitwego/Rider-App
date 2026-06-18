@@ -46,6 +46,15 @@ export const SPRING_CONFIG: WithSpringConfig = {
   overshootClamping: true,
 };
 
+const DEFAULT_VEHICLE_IMAGE = require("../../../assets/images/ic_white_taxi.png");
+const VEHICLE_IMAGES: Record<string, number> = {
+  Bike: require("../../../assets/images/ny_ic_bike_left_side.png"),
+  Auto: require("../../../assets/images/ny_ic_auto.png"),
+};
+
+const getVehicleImage = (vehicleType?: string) =>
+  (vehicleType && VEHICLE_IMAGES[vehicleType]) || DEFAULT_VEHICLE_IMAGE;
+
 export interface Props {
   children: React.ReactNode;
 }
@@ -184,7 +193,7 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
                 s.alignCenter,
                 s.justifyCenter,
                 s.borderRadius_md,
-                { backgroundColor: colors.gray_100 },
+                { backgroundColor: "rgba(15, 36, 36, 0.6)" },
               ]}
               onPress={() => {
                 if (!rideData?.to) return;
@@ -210,7 +219,7 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
                   atoms.gap_lg,
                   s.borderRadius_md,
                   {
-                    backgroundColor: colors.gray_100,
+                    backgroundColor: "rgba(15, 36, 36, 0.6)",
                     paddingHorizontal: 6,
                     paddingVertical: 4,
                   },
@@ -233,7 +242,7 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
         )}
         <ReanimatedTrueSheet
           cornerRadius={16}
-          detents={[0.5, 0.9]}
+          detents={[0.5, 1]}
           dimmedDetentIndex={1}
           dimmed
           dismissible={false}
@@ -306,7 +315,7 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
                     ]}
                   >
                     <Image
-                      source={require("../../../assets/images/ic_white_taxi.png")}
+                      source={getVehicleImage(rideData?.vehicle_type)}
                       style={{ flex: 1, height: null, width: null }}
                       contentFit="cover"
                       accessible={true}

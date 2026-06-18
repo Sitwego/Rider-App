@@ -68,17 +68,18 @@ public class SitwegoMainModule extends ReactContextBaseJavaModule {
 
 
     @ReactMethod
-    public void start(){
+    public void start(String rideId){
         Activity activity = getCurrentActivity();
         if (activity == null){
             return;
         }
         activity.runOnUiThread(() -> {
-            Log.i(TAG, "start: Starting Rpc Streaming Service");
+            Log.i(TAG, "start: Starting Rpc Streaming Service for ride " + rideId);
             RpcStreamingService.startRpcStreamingService(
                     activity.getClass(),
                     getReactApplicationContext(),
-                    this
+                    this,
+                    rideId
             );
         });
     }

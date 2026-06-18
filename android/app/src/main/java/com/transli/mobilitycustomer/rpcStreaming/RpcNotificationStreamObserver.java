@@ -23,10 +23,18 @@ public class RpcNotificationStreamObserver implements StreamObserver<DriverLocat
      * A method that is responsible for initiating connection to the server
      *
      */
-    public void startConnection(StreamObserver<LocationChangeRequest> locationChangeRequestStreamObserver) {
+    public void startConnection(StreamObserver<LocationChangeRequest> locationChangeRequestStreamObserver, String rideId) {
         this.locationChangeRequestStreamObserver = locationChangeRequestStreamObserver;
-        locationChangeRequestStreamObserver.onNext(LocationChangeRequest.newBuilder().build());
-        Log.d(TAG, "[Rpc Connection Started]");
+        // The first message declares which ride to watch — the server keys its
+        // subscription registry off LocationChangeRequest.ride_id.
+        LocationChangeRequest.Builder request = LocationChangeRequest.newBuilder();
+        if (rideId != null && !rideId.isEmpty()) {
+            request.setRideId(rideId);
+        } else {
+            Log.w(TAG, "startConnection: missing rideId — server will not stream until one is sent");
+        }
+        locationChangeRequestStreamObserver.onNext(request.build());
+        Log.d(TAG, "[Rpc Connection Started] rideId=" + rideId);
     }
 
     /**

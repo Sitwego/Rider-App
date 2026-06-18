@@ -6,11 +6,12 @@ import {
   withSpring,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { LocationResult } from "react-native-place-picker";
 
-import { RnAnimatedView, RnView } from "~/ui/RnView";
 import RnText from "~/ui/RnText";
+import { RnAnimatedView, RnView } from "~/ui/RnView";
 import { useAppTheme } from "~/ui/theme";
+
+import type { LocationResult } from "react-native-place-picker";
 
 const SHEET_HEIGHT = 220;
 

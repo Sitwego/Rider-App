@@ -115,7 +115,7 @@ export function useLocationUpdates(
 ) {
   useEffect(() => {
     if (!activeRideId) return;
-    startWatchingLocationChanges();
+    startWatchingLocationChanges(activeRideId);
     return () => {
       console.log("Stopping location changes for ride:", activeRideId);
       stopWatchingLocationChanges();
@@ -126,6 +126,7 @@ export function useLocationUpdates(
     const sub = nativeBridgeEventEmitter.addListener(
       "locationChange",
       (data) => {
+        console.log("Received locationChange event:", data);
         if (!data?.remainingCoordinates) return;
         try {
           const parsedCoordinates = JSON.parse(data.remainingCoordinates);
@@ -133,9 +134,10 @@ export function useLocationUpdates(
             type: "UPDATE-ACTIVE-RIDE",
             data: {
               rideData: {
+                // Only the remaining-route remainder; the reducer deep-merges
+                // ride_polyline so driver_to_pickup_polyline is preserved.
                 ride_polyline: {
                   from_to: parsedCoordinates,
-                  driver_to_pickup_polyline: [],
                 },
               } as Partial<RideRequestData>,
               should_persist: true,
@@ -182,9 +184,18 @@ export function useRidePollingEffect(
         rideData: {
           ...data,
           ride_polyline: {
-            from_to: searchData ? getCoordinatesFromLineStr(data.p1) : [],
+            from_to:
+              Array.isArray(data.p1) && data.p1.length > 0
+                ? getCoordinatesFromLineStr(data.p1)
+                : [],
+            // Driver->pickup leg arrives as p2 ([lng,lat] tuples), same shape
+            // as p1; convert it the same way for the Accepted-phase marker.
+            // Guard for a non-empty array: an empty/absent leg is omitted so
+            // the map cleanly falls back to the trip route.
             driver_to_pickup_polyline:
-              data?.ride_polyline?.driver_to_pickup_polyline,
+              Array.isArray(data.p2) && data.p2.length > 0
+                ? getCoordinatesFromLineStr(data.p2)
+                : undefined,
           },
         },
         ride_status: data.request_status,
