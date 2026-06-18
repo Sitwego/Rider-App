@@ -22,7 +22,7 @@ public class SitwegoMainModule extends ReactContextBaseJavaModule {
 
     /**
      * @return the name of this module. This will be the name used to {@code require()} this module
-     * from javascript.
+     * from JavaScript.
      */
     @NonNull
     @Override
