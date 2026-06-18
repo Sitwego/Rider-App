@@ -56,7 +56,7 @@ export const LocationPickerProvider: React.FC<React.PropsWithChildren> = ({
     <LocationPickerContext.Provider value={{ openPicker }}>
       {children}
       {isOpen && (
-        <RnView style={StyleSheet.absoluteFillObject}>
+        <RnView style={StyleSheet.absoluteFill}>
           <LocationPicker onLocationSelected={handleLocationSelected} />
           <Pressable
             style={{

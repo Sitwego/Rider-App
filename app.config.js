@@ -83,6 +83,7 @@ const config = {
     "expo-audio",
     "expo-image",
     "expo-asset",
+    "expo-status-bar",
     [
       "expo-splash-screen",
       {
