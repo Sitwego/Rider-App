@@ -1,5 +1,4 @@
 import { useNavigation } from "@react-navigation/native";
-import Config from "react-native-config";
 import React, {
   memo,
   useCallback,
@@ -10,6 +9,7 @@ import React, {
   useState,
 } from "react";
 import { BackHandler, FlatList, StyleSheet } from "react-native";
+import Config from "react-native-config";
 import { Pressable, ScrollView } from "react-native-gesture-handler";
 import {
   useSharedValue,

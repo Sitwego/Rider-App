@@ -18,6 +18,7 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
+import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.WritableMap;
 import com.transli.mobilitycustomer.GrpcChannelManager;
 import com.transli.mobilitycustomer.SitwegoMainModule;
@@ -43,11 +44,13 @@ public class RpcStreamingService extends Service implements RpcStreamInterface {
     private static WatchLocationServiceGrpc.WatchLocationServiceStub asyncStub;
 
     private static final String CHANNEL_ID = "WatchLocationServiceNotification";
+    public static final String EXTRA_RIDE_ID = "ride_id";
 
     public  static Class<? extends Activity> activityClassToOpenFromNotification;
     private final ScheduledExecutorService retryExecutor = Executors.newSingleThreadScheduledExecutor();
 
     public static String TOKEN;
+    private String rideId;
 
     private ManagedChannel managedChannel;
     public GeoEtaUtils geoEtaUtils = new GeoEtaUtils();
@@ -100,7 +103,7 @@ public class RpcStreamingService extends Service implements RpcStreamInterface {
             Log.e(TAG, "initRpcConnection: failed empty token!");
             return;
         }
-        Log.d(TAG, "Initializing RPC Connection With Token: " + TOKEN);
+        Log.d(TAG, "Initializing RPC Connection With Token: ");
         startRpcConnection();
     }
 
@@ -142,7 +145,8 @@ public class RpcStreamingService extends Service implements RpcStreamInterface {
                 rpcNotificationStreamObserver
         );
         rpcNotificationStreamObserver.startConnection(
-                locationChangeRequestStreamObserver
+                locationChangeRequestStreamObserver,
+                rideId
         );
     }
 
@@ -168,13 +172,15 @@ public class RpcStreamingService extends Service implements RpcStreamInterface {
     public static void startRpcStreamingService(
             Class<? extends Activity> activityClass,
             Context context,
-            SitwegoMainModule _sitwegoMainModule
+            SitwegoMainModule _sitwegoMainModule,
+            String rideId
     ){
         activityClassToOpenFromNotification = activityClass;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             createNotificationChannel(context);
         }
         Intent intent = new Intent(context, RpcStreamingService.class);
+        intent.putExtra(EXTRA_RIDE_ID, rideId);
         ContextCompat.startForegroundService(context, intent);
     }
 
@@ -220,16 +226,28 @@ public class RpcStreamingService extends Service implements RpcStreamInterface {
     }
     @Override
     public void onMessage(DriverLocationChange locationChange) {
-        // we can find position and eta on polyline
+        Log.v(TAG, "onLocationChageMessage" + locationChange.toString());
+        // Try to project the fix onto the route polyline for ETA / remaining
+        // coordinates. This is null before a route polyline is loaded — most
+        // notably during the Accepted phase (driver heading to pickup), where
+        // GeoEtaUtils only reads "from_to" and that array is still empty. Fall
+        // back to a bare map so we always forward the raw fix and never NPE.
         WritableMap pEta = geoEtaUtils.findCurrentPositionOnPolyline(
                 locationChange.getLatitude(),
                 locationChange.getLongitude(),
                 (int) locationChange.getSpeed()
         );
         Log.i(TAG, "onMessage: " + pEta);
+        if (pEta == null) {
+            pEta = Arguments.createMap();
+        }
         pEta.putString("rideId", locationChange.getRideId());
+        pEta.putDouble("accuracy", locationChange.getAccuracy());
+        pEta.putDouble("speed", locationChange.getSpeed());
         pEta.putDouble("bearing", locationChange.getBearing());
         pEta.putDouble("timestamp", locationChange.getTimestamp());
+        pEta.putDouble("latitude", locationChange.getLatitude());
+        pEta.putDouble("longitude", locationChange.getLongitude());
         SitwegoMainModule.sendJsEvent("locationChange", pEta);
     }
 
@@ -275,7 +293,10 @@ public class RpcStreamingService extends Service implements RpcStreamInterface {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Notification notification = createNotification();
         this.startForeground(1, notification);
-//        initRpcConnection();
+        if (intent != null) {
+            rideId = intent.getStringExtra(EXTRA_RIDE_ID);
+        }
+        initRpcConnection();
         //start RideEventService Too
         if (!isServiceRunning(getApplicationContext(), RideEventService.class)){
             Log.i(TAG, "onStartCommand: Starting RideEventService");

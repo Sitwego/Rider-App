@@ -39,15 +39,36 @@ public class GeoEtaUtils {
 
     private String getPolyLineStr (){
         String p = mmkv.getString("active_ride", "null");
-        // lets extract ridePolyLine from the string
+        Log.i(TAG, "RIDE_PATH" + p);
+        // Extract the polyline to project the driver fix onto. Returns "[]"
+        // (never throws) when nothing usable is stored, so the caller degrades
+        // to forwarding the raw fix instead of crashing the gRPC stream.
         try {
             JSONObject root = new JSONObject(p);
-            JSONObject data = root.getJSONObject("data").getJSONObject("rideData");
-            JSONArray ridePolyLine = data.getJSONObject("ride_polyline").getJSONArray("from_to");
-            Log.d(TAG, "GeoEtaUtils: " + ridePolyLine);
+            JSONObject data = root.optJSONObject("data");
+            if (data == null) return "[]";
+            String rideStatus = data.optString("ride_status", "");
+            JSONObject rideData = data.optJSONObject("rideData");
+            JSONObject ridePolyline =
+                    rideData == null ? null : rideData.optJSONObject("ride_polyline");
+            if (ridePolyline == null) return "[]";
+
+            // Before the trip starts (driver heading to pickup — any pre-trip
+            // status) project onto the driver->pickup leg so the marker tracks
+            // the approach. Once Inprogress, use the pickup->destination route.
+            JSONArray ridePolyLine = null;
+            if (!"Inprogress".equals(rideStatus)) {
+                ridePolyLine = ridePolyline.optJSONArray("driver_to_pickup_polyline");
+            }
+            if (ridePolyLine == null || ridePolyLine.length() == 0) {
+                ridePolyLine = ridePolyline.optJSONArray("from_to");
+            }
+            if (ridePolyLine == null) return "[]";
+            Log.d(TAG, "GeoEtaUtils: status=" + rideStatus + " points=" + ridePolyLine.length());
             return ridePolyLine.toString();
         } catch (JSONException e) {
-            throw new RuntimeException(e);
+            Log.w(TAG, "getPolyLineStr: failed to parse active_ride", e);
+            return "[]";
         }
     }
 

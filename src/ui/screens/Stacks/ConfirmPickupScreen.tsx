@@ -49,7 +49,7 @@ export function ConfirmPickupScreen({ navigation, route }: Props) {
   );
 
   return (
-    <RnView style={[StyleSheet.absoluteFillObject, {}]}>
+    <RnView style={[StyleSheet.absoluteFill, {}]}>
       <LocationPicker
         pin_location={{ latitude, longitude }}
         onLocationSelected={handleLocationSelected}
