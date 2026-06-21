@@ -241,9 +241,18 @@ export class VehicleTracker {
     // Start from the current authoritative estimate (not the raw displayed
     // value — CorrectionEngine closes that gap smoothly every frame) and
     // animate to the newly snapped progress over the measured update gap.
+    //
+    // Forward-only: on-route progress is monotonic, so never target a point
+    // behind the current estimate. A snapped progress that regresses is GPS
+    // noise (the nearest-point projection wobbling backward) or dead-reckoning
+    // overshoot from a late fix — animating to it is the visible "creep
+    // forward then snap back" jitter. Clamp the target to the estimate so the
+    // marker holds until real forward progress passes it. A genuine large
+    // reversal (re-route, big GPS jump) already hit the hard reset above.
+    const targetProgress = Math.max(snap.routeProgress, estimate);
     this.segment = {
       startProgress: estimate,
-      targetProgress: snap.routeProgress,
+      targetProgress,
       startTimeMs: now,
       durationMs: clamp(
         sinceLastMs,
@@ -251,8 +260,10 @@ export class VehicleTracker {
         this.config.maxSegmentDurationMs,
       ),
     };
+    // currentProgress tracks the true snapped position (it seeds the next
+    // snap hint), even when the displayed target is held forward.
     this.state.currentProgress = snap.routeProgress;
-    this.state.targetProgress = snap.routeProgress;
+    this.state.targetProgress = targetProgress;
     this.state.speed = speed;
     this.acceptTimestamps(update, now);
   }

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { EmitterSubscription, StyleSheet } from "react-native";
 import { Pressable } from "react-native-gesture-handler";
 import MapView, { Camera } from "react-native-maps";
@@ -13,7 +19,9 @@ import { SmoothDriverMarker } from "~/components/RnMaps/SmoothDriverMarker";
 import { TrackingDemo } from "~/components/TrackingDemo";
 import { useRequestPushNotificationPermission } from "~/hooks/notification";
 import {
+  calcDynamicPitch,
   calcDynamicZoom,
+  DEFAULT_ZOOM,
   useFollowVehicleCamera,
 } from "~/hooks/useFollowVehicleCamera";
 import { useSheetMapPadding } from "~/hooks/useSheetMapPadding";
@@ -38,9 +46,6 @@ import { RnView } from "../RnView";
 import { useAppTheme } from "../theme";
 import { atoms } from "../theme/atoms";
 
-// ----------------------------------------------------------------
-// Permission gate UI — shown instead of the map when location is
-// not yet available. Each state has its own CTA.
 const RideMapView: React.FC = () => {
   const mapRef = useRef<MapView>(null);
   const activeRide = useActiveRide();
@@ -48,18 +53,6 @@ const RideMapView: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { ride_status, rideData, ride_status_update_keys } =
     useActiveRideState();
-  const [camera, _setCamera] = useState<Camera>(() => {
-    return {
-      zoom: 16,
-      //this should be dynamic based on ride data or current location
-      center: {
-        latitude: 0,
-        longitude: 0,
-      },
-      heading: -10,
-      pitch: 5,
-    };
-  });
   const getPolylineCoordinates = useMemo(() => {
     // Pre-trip (driver heading to pickup): render the driver->pickup leg so
     // the marker animates along the approach and the raw fix snaps onto the
@@ -76,27 +69,25 @@ const RideMapView: React.FC = () => {
     return [];
   }, [rideData, ride_status]);
 
-  // Latest raw driver fix: the first coordinate of the remaining-route
-  // polyline pushed by the native "locationChange" events (~2 s cadence).
-  // The payload is raw-parsed JSON, so tolerate both Point objects and
-  // [lng, lat] tuples.
+  // Latest raw driver fix: the driver's true GPS coordinate from the native
+  // "locationChange" events (~2 s cadence). Use the raw fix rather than the
+  // route's first coordinate so the marker/camera track the driver's actual
+  // position instead of a point snapped onto the polyline.
   const driverPoint = useMemo<Point | undefined>(() => {
-    const remaining = rideData?.ride_polyline?.from_to as unknown;
-    if (!Array.isArray(remaining) || remaining.length === 0) return undefined;
-    const first = remaining[0] as unknown;
-    if (Array.isArray(first) && first.length >= 2) {
-      return { latitude: Number(first[1]), longitude: Number(first[0]) };
-    }
-    const point = first as Partial<Point>;
+    const fix = rideData?.driver_location;
     if (
-      typeof point?.latitude === "number" &&
-      typeof point?.longitude === "number"
+      !fix ||
+      typeof fix.latitude !== "number" ||
+      typeof fix.longitude !== "number"
     ) {
-      return { latitude: point.latitude, longitude: point.longitude };
+      return undefined;
     }
-    return undefined;
-  }, [rideData]);
+    return { latitude: fix.latitude, longitude: fix.longitude };
+  }, [rideData?.driver_location]);
 
+  console.log("RideMapView render: driverPoint", driverPoint, "route coords", {
+    getPolylineCoordinates,
+  });
   const ride_duration = useMemo(() => {
     if (!rideData) return "";
     // Pre-trip the destination marker sits at the pickup point, so show the
@@ -125,45 +116,61 @@ const RideMapView: React.FC = () => {
     onRegionChange,
     onRegionChangeComplete,
     onPanDrag,
-  } = useFollowVehicleCamera(mapRef);
+  } = useFollowVehicleCamera(mapRef, {
+    // Driven by the ~60 fps marker frame (below) rather than the ~2 s GPS
+    // fixes, so a tighter cadence keeps the camera glued to the smooth marker.
+    followIntervalMs: 500,
+    followDurationMs: 800,
+  });
 
   // Keep the followed vehicle centered in the map area above the active-ride
   // sheet (20px gap), reframing onto the driver whenever the sheet snaps to a
   // new detent.
   const mapPadding = useSheetMapPadding(mapRef, driverPoint, { gap: 20 });
 
-  // Animation frames only supply the smoothed route bearing; the camera
-  // itself is pushed on GPS arrivals (driverPoint changes) below.
-  const driverHeadingRef = useRef<number | undefined>(undefined);
+  // The smoothed marker frame (≈60 fps) is the camera's follow source: it
+  // glides continuously along the route between the ~2 s GPS fixes, so the
+  // camera tracks it smoothly instead of lurching to each raw fix. The active
+  // endpoint (pickup pre-trip, dropoff in-progress — the route's last
+  // coordinate) is held in a ref so the per-frame zoom can be derived from the
+  // distance to it without re-creating the frame handler each route tick.
+  const endpointRef = useRef<Point | undefined>(undefined);
+  useEffect(() => {
+    endpointRef.current =
+      getPolylineCoordinates.length > 0
+        ? getPolylineCoordinates[getPolylineCoordinates.length - 1]
+        : undefined;
+  }, [getPolylineCoordinates]);
+
+  // Don't drive the camera until a real GPS fix has landed — pre-fix frames
+  // sit at the route start. Mirrors the previous "engage on first fix".
+  const hasDriverFixRef = useRef(false);
+  useEffect(() => {
+    if (driverPoint) hasDriverFixRef.current = true;
+  }, [driverPoint]);
+
+  // Navigation-style camera: each smoothed frame glides the center to the
+  // marker, rotates the map to the marker's (route-derived) heading, and sets
+  // the distance-driven zoom/pitch. followTo throttles itself, so calling it
+  // every frame is fine. Distance to the active endpoint drives the zoom:
+  // close in → street-level close-up, far out → route overview.
   const handleDriverFrame = useCallback(
     (frame: { latitude: number; longitude: number; heading: number }) => {
-      driverHeadingRef.current = frame.heading;
+      if (!hasDriverFixRef.current) return;
+      console.log("handleDriverFrame", frame);
+      const endpoint = endpointRef.current;
+      const zoom = endpoint
+        ? calcDynamicZoom(
+            haversineDistance(
+              { latitude: frame.latitude, longitude: frame.longitude },
+              endpoint,
+            ),
+          )
+        : undefined;
+      followTo(frame.latitude, frame.longitude, frame.heading, zoom);
     },
-    [],
+    [followTo],
   );
-
-  // Distance drives the zoom: as the driver nears the active endpoint
-  // (pickup pre-trip, dropoff in-progress — the route's last coordinate)
-  // the camera tightens toward street level; far out it pulls back to a
-  // route overview. Recomputed only when the position or route changes.
-  const followZoom = useMemo<number | undefined>(() => {
-    if (!driverPoint || getPolylineCoordinates.length === 0) return undefined;
-    const endpoint = getPolylineCoordinates[getPolylineCoordinates.length - 1];
-    return calcDynamicZoom(haversineDistance(driverPoint, endpoint));
-  }, [driverPoint, getPolylineCoordinates]);
-
-  // Navigation-style camera: every new driver GPS coordinate glides the
-  // center there, rotates the map to the driver's bearing, and sets the
-  // distance-driven zoom/pitch (see useFollowVehicleCamera).
-  useEffect(() => {
-    if (!driverPoint) return;
-    followTo(
-      driverPoint.latitude,
-      driverPoint.longitude,
-      driverHeadingRef.current,
-      followZoom,
-    );
-  }, [driverPoint, followTo, followZoom]);
 
   // Content key for the route: upstream state churn recreates the
   // coordinates array (same content) on every locationChange tick, and
@@ -201,8 +208,21 @@ const RideMapView: React.FC = () => {
   return (
     <RnView style={[atoms.flex_1, { marginTop: insets.top }]}>
       <RnMapView
-        camera={camera}
-        // onMapReady={_onMapReady}
+        // Uncontrolled camera: follow/recenter drive it imperatively via
+        // animateCamera. Set the initial view once the map is ready (a
+        // *controlled* `camera` prop would be reasserted on every re-render —
+        // e.g. recenter's setIsFollowing(true) — cancelling those animations).
+        onMapReady={() => {
+          const start = driverPoint ?? getPolylineCoordinates[0];
+          if (start) {
+            mapRef.current?.setCamera({
+              center: { latitude: start.latitude, longitude: start.longitude },
+              zoom: DEFAULT_ZOOM,
+              pitch: calcDynamicPitch(DEFAULT_ZOOM),
+              heading: 0,
+            });
+          }
+        }}
         // onMapLoaded={_onMapLoaded}
         ref={mapRef}
         mapPadding={mapPadding}
@@ -266,11 +286,12 @@ const RideMapView: React.FC = () => {
 // Dev-only: replace the home screen with the vehicle-tracking demo
 // (simulated GPS along src/tracking/testing/mockRoute). Flip to false
 // (or delete the flag and wrapper below) when done testing.
-const SHOW_TRACKING_DEMO = __DEV__ && true;
+// const SHOW_TRACKING_DEMO = __DEV__ && true;
 
 export const RiderHomeScreen: React.FC<any> = (props) => (
   <RiderHome {...props} />
 );
+RiderHomeScreen.displayName = "RiderHomeScreen";
 
 const RiderHome: React.FC<any> = (props) => {
   const mapRef = useRef<MapView>(null);
@@ -438,7 +459,7 @@ const RiderHome: React.FC<any> = (props) => {
                   fontSize: 14,
                 }}
               >
-                Leaving From
+                Where are you going?
               </RnText>
               <RnView
                 style={[
@@ -459,41 +480,6 @@ const RiderHome: React.FC<any> = (props) => {
                 />
               </RnView>
             </Pressable>
-            {/* <Pressable
-              onPress={() => {
-                props.navigation.push("RatingScreen", {
-                  driverId: "1234",
-                  rideId: "5678",
-                });
-              }}
-              style={[
-                atoms.gap_lg,
-                {
-                  height: 56,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  alignContent: "center",
-                },
-              ]}
-            >
-              <RnView
-                style={[{ justifyContent: "center", alignItems: "center" }]}
-              >
-                <Icon
-                  name="CircleStop"
-                  strokeWidth={4}
-                  size={24}
-                  color={colors.red_300}
-                />
-              </RnView>
-              <RnText
-                style={{
-                  fontSize: 14,
-                }}
-              >
-                Going To
-              </RnText>
-            </Pressable> */}
           </RnView>
           <RnView
             style={{

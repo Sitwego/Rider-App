@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "sentry-react-native-sdk": {
+      "source": "getsentry/sentry-for-ai",
+      "sourceType": "github",
+      "skillPath": "skills/sentry-react-native-sdk/SKILL.md",
+      "computedHash": "0a945aa1c98f3d213e78a031e19cdf35f538d6b3a410732a8a7af216e78f7d58"
+    }
+  }
+}

@@ -7,6 +7,15 @@ export type RidePolylineGeoData = {
   driver_to_pickup_polyline?: Point[];
 };
 
+/** The driver's raw GPS fix from a native "locationChange" event — the true
+ * device position/heading, not a point snapped onto the route polyline. */
+export type DriverLocationFix = {
+  latitude: number;
+  longitude: number;
+  /** Device heading in degrees from the raw GPS fix, when reported. */
+  bearing?: number;
+};
+
 export type RideRequestData = {
   color?: string;
   created_at?: string;
@@ -37,6 +46,8 @@ export type RideRequestData = {
   from?: LocationInfo;
   to?: LocationInfo;
   ride_polyline?: RidePolylineGeoData;
+  /** Latest raw GPS fix for the driver, fed by "locationChange" events. */
+  driver_location?: DriverLocationFix;
   [key: string]: any;
 };
 

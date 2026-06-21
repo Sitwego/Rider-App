@@ -19,6 +19,7 @@ import { getCoordinatesFromLineStr } from "~/utils/geo";
 import { useLoadingSheet } from "./LoadingSheetProvider";
 import { useRideSearchState } from "./RideBookingModalProvider";
 
+import type { Point } from "~/types/geoTypes";
 import type {
   DriverArrivedPayload,
   RideEvent,
@@ -126,30 +127,54 @@ export function useLocationUpdates(
     const sub = nativeBridgeEventEmitter.addListener(
       "locationChange",
       (data) => {
-        console.log("Received locationChange event:", data);
-        if (!data?.remainingCoordinates) return;
-        try {
-          const parsedCoordinates = JSON.parse(data.remainingCoordinates);
-          setActiveRideState({
-            type: "UPDATE-ACTIVE-RIDE",
-            data: {
-              rideData: {
-                // Only the remaining-route remainder; the reducer deep-merges
-                // ride_polyline so driver_to_pickup_polyline is preserved.
-                ride_polyline: {
-                  from_to: parsedCoordinates,
-                },
-              } as Partial<RideRequestData>,
-              should_persist: true,
-            },
-          });
-        } catch (error) {
-          console.error(
-            "Error parsing remainingCoordinates:",
-            data.remainingCoordinates,
-            error,
-          );
+        // Raw GPS fix: the driver's true device position/heading. Used as the
+        // latest driver point instead of the route's first coordinate (which
+        // is snapped onto the polyline).
+        const lat = Number(data?.latitude);
+        const lng = Number(data?.longitude);
+        const bearing = Number(data?.bearing);
+        const hasFix = Number.isFinite(lat) && Number.isFinite(lng);
+
+        console.log("Received locationChange event:", data, "Parsed lat/lng:", {
+          lat,
+          lng,
+          bearing,
+        });
+
+        // Shrinking remaining-route remainder, when present.
+        let fromTo: Point[] | undefined;
+        if (data?.remainingCoordinates) {
+          try {
+            fromTo = JSON.parse(data.remainingCoordinates);
+          } catch (error) {
+            console.error(
+              "Error parsing remainingCoordinates:",
+              data.remainingCoordinates,
+              error,
+            );
+          }
         }
+
+        if (!hasFix && !fromTo) return;
+
+        const rideData: Partial<RideRequestData> = {};
+        if (hasFix) {
+          rideData.driver_location = {
+            latitude: lat,
+            longitude: lng,
+            ...(Number.isFinite(bearing) ? { bearing } : null),
+          };
+        }
+        if (fromTo) {
+          // Only the remaining-route remainder; the reducer deep-merges
+          // ride_polyline so driver_to_pickup_polyline is preserved.
+          rideData.ride_polyline = { from_to: fromTo };
+        }
+
+        setActiveRideState({
+          type: "UPDATE-ACTIVE-RIDE",
+          data: { rideData, should_persist: true },
+        });
       },
     );
     return () => sub.remove();
