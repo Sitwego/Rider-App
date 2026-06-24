@@ -5,7 +5,11 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import StarRating from "react-native-star-rating-widget";
 
-import { useRideFareHistory, useSubmitDriverReview } from "~/hooks/api";
+import {
+  labelForFareKey,
+  useRideFareHistory,
+  useSubmitDriverReview,
+} from "~/hooks/api";
 import { s } from "~/styles/Common-Styles";
 import RnText from "~/ui/RnText";
 import RnTextInput from "~/ui/RnTextInput";
@@ -56,14 +60,13 @@ export default function RatingComponent() {
   const { mutateAsync: submitReview, isPending } = useSubmitDriverReview();
   const { data: fareHistory } = useRideFareHistory(params.rideId);
   const fare = fareHistory?.[0];
-  const extraCharges = fare
-    ? (
-        [
-          ["Extra distance", fare.components.extra_dx],
-          ["Toll", fare.components.toll],
-          ["Waiting charge", fare.components.waiting_charge],
-        ] as const
-      ).filter(([, v]) => v > 0)
+  // Every component except the base estimate is a surcharge; render them all
+  // dynamically so admin-added components (pickup fare, fuel surcharge, …)
+  // surface without a client change.
+  const extraCharges: [string, number][] = fare
+    ? Object.entries(fare.components)
+        .filter(([key, value]) => key !== "estimated_fare" && value > 0)
+        .map(([key, value]) => [labelForFareKey(key), value])
     : [];
 
   const [punctuality, setPunctuality] = React.useState(0);

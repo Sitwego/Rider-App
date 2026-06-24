@@ -359,13 +359,38 @@ export function useRideDetails(rideId: string) {
   });
 }
 
+/**
+ * Fare components are server-driven and admin-extendable (new surcharges like
+ * `pickup_fare`, `fuel_surcharge` can appear without a client release), so the
+ * map is open. `estimated_fare` is always present; everything else is an
+ * optional surcharge keyed by its server name.
+ */
+export type RideFareComponents = {
+  estimated_fare: number;
+} & Record<string, number>;
+
+/** Friendly labels for known fare component keys. Unknown keys fall back to a
+ * humanized form of the key (see {@link labelForFareKey}). */
+export const FARE_COMPONENT_LABELS: Record<string, string> = {
+  estimated_fare: "Estimated fare",
+  extra_dx: "Extra distance",
+  toll: "Toll",
+  waiting_charge: "Waiting charge",
+  pickup_fare: "Pick-up fare",
+  fuel_surcharge: "Fuel surcharge",
+};
+
+export function labelForFareKey(key: string): string {
+  return (
+    FARE_COMPONENT_LABELS[key] ??
+    key
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}
+
 export type RideFareEntry = {
-  components: {
-    estimated_fare: number;
-    extra_dx: number;
-    toll: number;
-    waiting_charge: number;
-  };
+  components: RideFareComponents;
   total: number;
   status: string;
   reason: string | null;
