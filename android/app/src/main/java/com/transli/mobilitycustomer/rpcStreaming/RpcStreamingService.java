@@ -309,7 +309,18 @@ public class RpcStreamingService extends Service implements RpcStreamInterface {
     @Override
     public void onCreate() {
         super.onCreate();
+        // The system can recreate this sticky service without the React host having
+        // resumed (which is the only place GrpcChannelManager.init() is otherwise
+        // called). Initialize the manager here so MMKV is ready in this process.
+        GrpcChannelManager.init();
         managedChannel = GrpcChannelManager.getChannel(this);
+        if (managedChannel == null) {
+            // No token yet (logged out / MMKV empty). Don't build a stub with a null
+            // channel — that throws NPE. Bail out gracefully; onStartCommand's
+            // initRpcConnection() also guards on a null channel and stops the service.
+            Log.e(TAG, "onCreate: gRPC channel unavailable (no token). Service will stop.");
+            return;
+        }
         TOKEN = GrpcChannelManager.getToken();
         asyncStub = WatchLocationServiceGrpc.newStub(managedChannel);
         watchChannelState(managedChannel);

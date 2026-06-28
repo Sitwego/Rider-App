@@ -210,8 +210,16 @@ public class RideEventService extends Service implements RideEventInterface {
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "onCreate");
+        // Ensure the manager (and its MMKV handle) is ready in this process — the
+        // system can recreate this sticky service without the React host resuming.
+        GrpcChannelManager.init();
         rpcChannel = GrpcChannelManager.getChannel(getApplicationContext());
-        assert rpcChannel != null;
+        if (rpcChannel == null) {
+            // No token yet. Don't watch state on a null channel (NPE); onStartCommand
+            // also guards on a null channel and stops the service.
+            Log.w(TAG, "onCreate: gRPC channel unavailable (no token). Service will stop.");
+            return;
+        }
         watchChannelState(rpcChannel);
         token = GrpcChannelManager.getLatestTokenFromStorage();
     }

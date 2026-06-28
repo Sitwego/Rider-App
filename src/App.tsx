@@ -1,5 +1,6 @@
 import { TrueSheetProvider } from "@lodev09/react-native-true-sheet";
 import { ReanimatedTrueSheetProvider } from "@lodev09/react-native-true-sheet/reanimated";
+import { BottomSheetProvider } from "@swmansion/react-native-bottom-sheet";
 import * as SplashScreen from "expo-splash-screen";
 import { FiberProvider } from "its-fine";
 import React, { useEffect } from "react";
@@ -64,35 +65,37 @@ const App: React.FC = () => {
               <GestureHandlerRootView style={[atoms.flex_1]}>
                 <GestureDetectorProvider>
                   <TrueSheetProvider>
-                    <ReanimatedTrueSheetProvider>
-                      <NetworkQueryProvider clientId="">
-                        <AuthProvider>
-                          {/*
-                           * Mounted INSIDE AuthProvider so authenticated
-                           * API helpers are available for fetchPolicy if
-                           * the remote-config endpoint requires auth.
-                           *
-                           * Mounted ABOVE RouterNavigation so the blocker
-                           * covers every screen including the splash and
-                           * auth flows.
-                           */}
-                          <InAppUpdateProvider
-                            policy={STATIC_UPDATE_POLICY}
-                            fetchPolicy={fetchUpdatePolicy}
-                            onEvent={(e) => {
-                              if (__DEV__) {
-                                console.log("[InAppUpdate]", e.name, e);
-                              }
-                              // TODO: forward to analytics (Segment / Mixpanel / Firebase).
-                            }}
-                            supportEmail="support@transli.com"
-                          >
-                            <RouterNavigation />
-                            <ToastComponent />
-                          </InAppUpdateProvider>
-                        </AuthProvider>
-                      </NetworkQueryProvider>
-                    </ReanimatedTrueSheetProvider>
+                    <BottomSheetProvider>
+                      <ReanimatedTrueSheetProvider>
+                        <NetworkQueryProvider clientId="">
+                          <AuthProvider>
+                            {/*
+                             * Mounted INSIDE AuthProvider so authenticated
+                             * API helpers are available for fetchPolicy if
+                             * the remote-config endpoint requires auth.
+                             *
+                             * Mounted ABOVE RouterNavigation so the blocker
+                             * covers every screen including the splash and
+                             * auth flows.
+                             */}
+                            <InAppUpdateProvider
+                              policy={STATIC_UPDATE_POLICY}
+                              fetchPolicy={fetchUpdatePolicy}
+                              onEvent={(e) => {
+                                if (__DEV__) {
+                                  console.log("[InAppUpdate]", e.name, e);
+                                }
+                                // TODO: forward to analytics (Segment / Mixpanel / Firebase).
+                              }}
+                              supportEmail="support@transli.com"
+                            >
+                              <RouterNavigation />
+                              <ToastComponent />
+                            </InAppUpdateProvider>
+                          </AuthProvider>
+                        </NetworkQueryProvider>
+                      </ReanimatedTrueSheetProvider>
+                    </BottomSheetProvider>
                   </TrueSheetProvider>
                 </GestureDetectorProvider>
               </GestureHandlerRootView>

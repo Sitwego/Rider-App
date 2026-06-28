@@ -19,6 +19,9 @@
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE"
         tools:ignore="ForegroundServicesPolicy" />
+    <!-- Required for services declaring android:foregroundServiceType="remoteMessaging"
+         on Android 14+ (API 34+). Without it, startForeground() throws SecurityException. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <!-- <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_LOCATION"
         tools:ignore="SystemPermissionTypo" /> -->
