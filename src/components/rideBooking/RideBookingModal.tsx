@@ -8,9 +8,9 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { BackHandler, FlatList, StyleSheet } from "react-native";
+import { BackHandler, StyleSheet } from "react-native";
 import Config from "react-native-config";
-import { Pressable, ScrollView } from "react-native-gesture-handler";
+import { Pressable } from "react-native-gesture-handler";
 import {
   useSharedValue,
   useAnimatedProps,
@@ -38,6 +38,8 @@ import {
 } from "../../../lib/placesUtils";
 import Icon from "../Icons";
 
+import { PlacesSuggestionList } from "./PlacesSuggestionList";
+
 import type {
   GooglePlaceData,
   GooglePlaceDetail,
@@ -48,7 +50,10 @@ const GOOGLE_PLACES_API_KEY = Config.GOOGLE_MAPS_API_KEY ?? "";
 // Shared config for both autocomplete inputs — defined outside to avoid
 // recreating on every render and invalidating fetchPlaceDetails callbacks.
 const PLACES_CONFIG = {
-  url: "https://maps.googleapis.com/maps/api",
+  // Places API (New) — https://places.googleapis.com/v1/places:autocomplete
+  // and /v1/places/{placeId}. See useGooglePlacesDetails + lib/placesApi.
+  url: "https://places.googleapis.com",
+  isNewPlacesAPI: true,
   query: {
     key: GOOGLE_PLACES_API_KEY,
     language: "en",
@@ -56,7 +61,7 @@ const PLACES_CONFIG = {
   },
   requestUrl: {
     useOnPlatform: "all" as const,
-    url: "https://maps.googleapis.com/maps/api",
+    url: "https://places.googleapis.com",
     headers: {} as Record<string, string>,
   },
   fetchDetails: true,
@@ -333,53 +338,6 @@ export const RideBookingModal = memo(
       [activeInput, fromFetchPlaceDetails, toFetchPlaceDetails],
     );
 
-    const _renderSeparator = useCallback(
-      (sectionID: any, rowID: any) => (
-        <RnView
-          key={`${sectionID}-${rowID}`}
-          style={{
-            height: StyleSheet.hairlineWidth,
-            backgroundColor: "#c8c7cc",
-          }}
-        />
-      ),
-      [],
-    );
-
-    const _renderRow = useCallback(
-      (rowData: any, _index: number) => {
-        const description =
-          rowData.description || rowData.formatted_address || rowData.name;
-        return (
-          <ScrollView
-            contentContainerStyle={{ minWidth: "100%" }}
-            scrollEnabled={true}
-            keyboardShouldPersistTaps="always"
-            horizontal={true}
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-          >
-            <Pressable
-              style={{ minWidth: "100%", justifyContent: "center" }}
-              onPress={() => _onPress(rowData)}
-            >
-              <RnView
-                style={{
-                  padding: 13,
-                  minHeight: 44,
-                  flexDirection: "row",
-                  borderRadius: 5,
-                }}
-              >
-                <RnText numberOfLines={2}>{description}</RnText>
-              </RnView>
-            </Pressable>
-          </ScrollView>
-        );
-      },
-      [_onPress],
-    );
-
     const _dataSource = activeInput === "from" ? fromDataSource : toDataSource;
 
     const _fromLeftButton = useCallback(
@@ -489,7 +447,7 @@ export const RideBookingModal = memo(
                     }
                   },
                 }}
-                isNewPlacesAPI={false}
+                isNewPlacesAPI={PLACES_CONFIG.isNewPlacesAPI}
                 minLength={3}
                 query={PLACES_CONFIG.query}
                 requestUrl={PLACES_CONFIG.requestUrl}
@@ -512,7 +470,7 @@ export const RideBookingModal = memo(
                     }
                   },
                 }}
-                isNewPlacesAPI={false}
+                isNewPlacesAPI={PLACES_CONFIG.isNewPlacesAPI}
                 minLength={3}
                 query={PLACES_CONFIG.query}
                 requestUrl={PLACES_CONFIG.requestUrl}
@@ -531,18 +489,21 @@ export const RideBookingModal = memo(
                 }}
                 onPress={() => {
                   openPicker((result) => {
+                    // result.name carries the POI label when the pin landed on
+                    // one (else the address); prefer it for display + name.
+                    const label = result.name || result.address;
                     const place: PlaceType = {
                       address: result.address,
-                      name: result.address,
+                      name: label,
                       lat: result.latitude,
                       lng: result.longitude,
                     };
                     if (activeInput === "from") {
                       setPickup(place);
-                      fromRef.current?.setAddressText(result.address);
+                      fromRef.current?.setAddressText(label);
                     } else {
                       setDropOff(place);
-                      toRef.current?.setAddressText(result.address);
+                      toRef.current?.setAddressText(label);
                     }
                   });
                 }}
@@ -573,20 +534,7 @@ export const RideBookingModal = memo(
               </Pressable>
             </RnView>
             {activeInput && _dataSource.length > 0 && (
-              <RnAnimatedView style={{ flexBasis: 1, flexGrow: 1 }}>
-                <FlatList
-                  nativeID="result-list-id"
-                  style={{ borderBottomWidth: 0, flex: 1, borderRadius: 0 }}
-                  contentContainerStyle={{ paddingTop: 20, flex: 1 }}
-                  data={_dataSource}
-                  keyExtractor={(item: any) =>
-                    item.place_id ?? item.description
-                  }
-                  renderItem={({ item, index }) => _renderRow(item, index)}
-                  //@ts-expect-error
-                  ItemSeparatorComponent={_renderSeparator}
-                />
-              </RnAnimatedView>
+              <PlacesSuggestionList items={_dataSource} onSelect={_onPress} />
             )}
           </RnAnimatedView>
         )}

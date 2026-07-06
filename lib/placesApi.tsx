@@ -177,8 +177,7 @@ export const GooglePlacesAutocomplete = forwardRef<
 
   useEffect(() => {
     return () => _abortRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [_abortRequests]);
 
   useImperativeHandle(ref, () => ({
     setAddressText: (address: SetStateAction<string>) => {
@@ -278,7 +277,22 @@ export const GooglePlacesAutocomplete = forwardRef<
             request.setRequestHeader("Accept-Language", query.language);
           }
           request.setRequestHeader("Content-Type", "application/json");
-          request.send(JSON.stringify({ input: text }));
+          // Map the legacy `components: "country:ke"` query into the New API's
+          // includedRegionCodes so region filtering carries over.
+          const includedRegionCodes =
+            typeof query.components === "string"
+              ? query.components
+                  .split("|")
+                  .map((c: string) => c.split(":")[1])
+                  .filter(Boolean)
+              : undefined;
+          request.send(
+            JSON.stringify({
+              input: text,
+              ...(query.language ? { languageCode: query.language } : {}),
+              ...(includedRegionCodes?.length ? { includedRegionCodes } : {}),
+            }),
+          );
         } else {
           request.open(
             "GET",

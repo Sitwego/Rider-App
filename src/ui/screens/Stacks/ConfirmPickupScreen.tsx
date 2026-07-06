@@ -31,7 +31,8 @@ export function ConfirmPickupScreen({ navigation, route }: Props) {
       const country = parts[parts.length - 1];
       const confirmedPickup: PlaceType = {
         address: result.address,
-        name: result.address,
+        // POI label when the pin landed on one, else the address.
+        name: result.name || result.address,
         country: country ?? "",
         lat: result.latitude,
         lng: result.longitude,
