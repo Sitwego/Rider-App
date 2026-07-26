@@ -13,10 +13,21 @@ import io.grpc.stub.StreamObserver;
 public class RpcNotificationStreamObserver implements StreamObserver<DriverLocationChange> {
     private final RpcStreamInterface rpcListeners;
     private static final String TAG = RpcNotificationStreamObserver.class.getName();
+    private volatile boolean detached;
     private StreamObserver<LocationChangeRequest> locationChangeRequestStreamObserver;
 
     public RpcNotificationStreamObserver(RpcStreamInterface rpcStreamInterface) {
         this.rpcListeners = rpcStreamInterface;
+    }
+
+    /**
+     * Stop forwarding callbacks to the service. Called when this stream is
+     * superseded or the service is destroyed — gRPC will still deliver the
+     * terminal callback for the cancelled call, and it must not reach a dead
+     * service instance (whose retry executor is already terminated).
+     */
+    void detach() {
+        detached = true;
     }
 
     /**
@@ -55,6 +66,9 @@ public class RpcNotificationStreamObserver implements StreamObserver<DriverLocat
      */
     @Override
     public void onNext(DriverLocationChange value) {
+        if (detached) {
+            return;
+        }
         if (value.getRideId() != null && !value.getRideId().isEmpty()){
             this.locationChangeRequestStreamObserver.onNext(
                     LocationChangeRequest.newBuilder()
@@ -86,6 +100,9 @@ public class RpcNotificationStreamObserver implements StreamObserver<DriverLocat
      */
     @Override
     public void onError(Throwable t) {
+        if (detached) {
+            return;
+        }
         this.rpcListeners.onError(t);
     }
 
@@ -98,6 +115,9 @@ public class RpcNotificationStreamObserver implements StreamObserver<DriverLocat
      */
     @Override
     public void onCompleted() {
+        if (detached) {
+            return;
+        }
         this.rpcListeners.onComplete();
     }
 }

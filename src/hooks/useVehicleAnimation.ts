@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 import { sharedAnimationController } from "~/tracking/AnimationController";
+import { hasMinimumDistinctPoints } from "~/tracking/RouteProgressCalculator";
 import { VehicleStateManager } from "~/tracking/VehicleStateManager";
 
 import type {
@@ -109,6 +110,17 @@ export function useVehicleAnimation(
   // ---- stable API ---------------------------------------------------
   const setVehicleRoute = useCallback(
     (vehicleId: string, route: RouteInput) => {
+      // prepareRoute() throws on degenerate routes (e.g. a server polyline
+      // whose points are all identical) — reject them here instead of
+      // crashing the app.
+      if (!hasMinimumDistinctPoints(route)) {
+        if (__DEV__) {
+          console.warn(
+            `[useVehicleAnimation] route for vehicle "${vehicleId}" has fewer than 2 distinct points — ignored.`,
+          );
+        }
+        return;
+      }
       manager.ensure(vehicleId, route, { replaceRoute: true });
     },
     [manager],

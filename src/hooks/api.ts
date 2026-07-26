@@ -14,8 +14,33 @@ import { LocationData } from "~/types/loactionAddress";
 
 import { useApiClient } from "./useApiClient";
 
+// Maps a picked place to the backend's `stops` array entry (RequestRideData).
+// Both /ride-fair-estimation and /send-ride-request must receive the SAME
+// stops — dx/duration/fare are estimated through them. Max one stop for now
+// (the backend validates the cap).
+function toStopsPayload(stop?: LocationData) {
+  if (!stop) return [];
+  return [
+    {
+      geo_point: {
+        lat: stop.lat,
+        lon: stop.lng,
+      },
+      place_id: stop.place_id,
+      city: stop.city ? stop.city : stop.state,
+      street: stop.street,
+      ward: stop.address ?? stop.name,
+      country: stop.country,
+    },
+  ];
+}
+
 export function useRideFairEstimation() {
-  const { pickup, dropOff }: { pickup: LocationData; dropOff: LocationData } =
+  const {
+    pickup,
+    dropOff,
+    stop,
+  }: { pickup: LocationData; dropOff: LocationData; stop?: LocationData } =
     useRideSearchState();
 
   const dropOffCity = useMemo(
@@ -63,6 +88,7 @@ export function useRideFairEstimation() {
             ward: dropOff.address ?? dropOff.name,
             country: dropOff.country,
           },
+          stops: toStopsPayload(stop),
         },
       });
     },
@@ -75,7 +101,7 @@ export function useRideFairEstimation() {
 }
 
 export function useSendRideRequest() {
-  const { pickup, dropOff, searchData } = useRideSearchState();
+  const { pickup, dropOff, stop, searchData } = useRideSearchState();
   const dropOffCity = useMemo(
     () => (dropOff?.city ? dropOff?.city : dropOff?.state),
     [dropOff?.city, dropOff?.state],
@@ -124,6 +150,7 @@ export function useSendRideRequest() {
             ward: dropOff.name,
             country: dropOff.country,
           },
+          stops: toStopsPayload(stop),
           dx: searchData?.distance ?? 0,
           duration: searchData?.duration[0] ?? 0,
           fare: category_data?.final_fare ?? 0,
@@ -213,17 +240,37 @@ export function useUpdateDeviceInfo() {
   });
 }
 
+/** Who caused the cancellation — mirrors the reason sheet's section grouping. */
+export type CancelRideReasonCategory = "rider" | "driver" | "service";
+
+/**
+ * Cancellation payload contract (the backend endpoint is wired to match this):
+ * - `reason`: stable machine id (e.g. `"not_responding"`) — for analytics,
+ *   driver-behavior tracking, and fee rules; never shown to users verbatim.
+ * - `reason_label`: the human-readable label the rider actually picked, so
+ *   support/driver views don't need the id → label mapping.
+ * - `category`: who caused it (`rider` | `driver` | `service`).
+ * - `note`: optional free-text comments from the rider.
+ */
+export type CancelRideRequestVars = {
+  reason: string;
+  reason_label: string;
+  category: CancelRideReasonCategory;
+  note?: string;
+};
+
 export function useCancelRideRequest() {
   const { makeApiCall } = useApiClient();
   const { rideData } = useActiveRideState();
 
-  return useMutation<any, Error, { note: string; reason: string }>({
+  return useMutation<any, Error, CancelRideRequestVars>({
     async mutationFn(data) {
       return makeApiCall({
         method: "POST",
         url: `api/cancel-ride/${rideData?.id}?account_type=customer`,
         data: {
           ...data,
+          note: data.note ?? "",
           ride_path_id: rideData?.id,
         },
         headers: {
@@ -383,9 +430,7 @@ export const FARE_COMPONENT_LABELS: Record<string, string> = {
 export function labelForFareKey(key: string): string {
   return (
     FARE_COMPONENT_LABELS[key] ??
-    key
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
+    key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   );
 }
 

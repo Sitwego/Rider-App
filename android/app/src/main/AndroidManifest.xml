@@ -5,7 +5,6 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="START_ACTIVITIES_FROM_BACKGROUND" />
     <!-- <uses-permission
         android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
         tools:ignore="BackgroundLocationPolicy" /> -->
@@ -19,6 +18,9 @@
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE"
         tools:ignore="ForegroundServicesPolicy" />
+    <!-- Required for services declaring android:foregroundServiceType="remoteMessaging"
+         on Android 14+ (API 34+). Without it, startForeground() throws SecurityException. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <!-- <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_LOCATION"
         tools:ignore="SystemPermissionTypo" /> -->
@@ -33,7 +35,6 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -97,13 +98,6 @@
             android:foregroundServiceType="remoteMessaging"
             android:largeHeap="true"
             android:stopWithTask="true" />
-        <service
-            android:name=".rpcStreaming.RideEventService"
-            android:foregroundServiceType="remoteMessaging"
-            android:largeHeap="true"
-            android:enabled="true"
-            android:stopWithTask="true"
-            android:exported="false" />
     </application>
 
 </manifest>

@@ -6,7 +6,12 @@ import {
 import { Image } from "expo-image";
 import { PressableScale as Pressable } from "pressto";
 import * as React from "react";
-import { Linking, StyleSheet } from "react-native";
+import {
+  Linking,
+  Pressable as RNPressable,
+  StyleSheet,
+  useWindowDimensions,
+} from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   Extrapolation,
@@ -26,6 +31,7 @@ import {
   useActiveRide,
 } from "~/providers/ActiveRideProvider";
 import { s } from "~/styles/Common-Styles";
+import { useBottomSheet } from "~/ui/BottomSheet";
 import { height } from "~/utils/dimensions";
 import { googleMapsNavigationLink } from "~/utils/geo";
 import { makePhoneCall } from "~/utils/linking";
@@ -39,12 +45,21 @@ import { RnAnimatedView, RnView } from "../RnView";
 import { useAppTheme } from "../theme";
 import { atoms } from "../theme/atoms";
 
+import { CancelRideReasonsContent } from "./CancelRideReasonSheet";
+
+import type { CancelReason } from "./CancelRideReasonSheet";
+
 export const SPRING_CONFIG: WithSpringConfig = {
   damping: 500,
   stiffness: 1000,
   mass: 3,
   overshootClamping: true,
 };
+
+const FAB_HEIGHT = 56; // matches the FAB row's fixed height
+const FAB_GAP = 8; // clearance kept above the sheet's top edge
+const COLLAPSED_DETENT = 0.5; // = detents[0] on the ReanimatedTrueSheet below
+const FAB_FADE_OUT_DETENT = 0.9; // stays visible through most of the drag, fades near full (1)
 
 const DEFAULT_VEHICLE_IMAGE = require("../../../assets/images/ic_white_taxi.png");
 const VEHICLE_IMAGES: Record<string, number> = {
@@ -59,43 +74,164 @@ export interface Props {
   children: React.ReactNode;
 }
 
+interface FareDetailsContentProps {
+  currency: string;
+  fare?: string;
+  distanceKm?: number;
+  duration?: string;
+  vehicleType?: string;
+  paymentMethod: string;
+  onClose: () => void;
+}
+
+const FareRow = ({ label, value }: { label: string; value: string }) => {
+  const { colors } = useAppTheme();
+  return (
+    <RnView style={[s.flexDirectionRow, s.spaceBetween, s.alignCenter]}>
+      <RnText style={[atoms.text_sm, { color: colors.gray }]}>{label}</RnText>
+      <RnText style={[atoms.text_sm, { color: colors.text }]}>{value}</RnText>
+    </RnView>
+  );
+};
+
+const FareDetailsContent = ({
+  currency,
+  fare,
+  distanceKm,
+  duration,
+  vehicleType,
+  paymentMethod,
+  onClose,
+}: FareDetailsContentProps) => {
+  const { colors } = useAppTheme();
+  return (
+    <RnView style={atoms.gap_lg}>
+      <RnView style={[s.flexDirectionRow, s.alignCenter, atoms.gap_sm]}>
+        <Icon name="ReceiptText" size={22} color={colors.green_500} />
+        <RnText style={[atoms.text_lg, { color: colors.text }]}>
+          Fare details
+        </RnText>
+      </RnView>
+
+      <RnView
+        style={[
+          s.flexDirectionRow,
+          s.spaceBetween,
+          s.alignCenter,
+          {
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.bg_100,
+          },
+        ]}
+      >
+        <RnText style={[atoms.text_md, { color: colors.gray }]}>
+          Estimated fare
+        </RnText>
+        <RnText style={[atoms.text_xl, { color: colors.text }]}>
+          {currency} {fare ?? "—"}
+        </RnText>
+      </RnView>
+
+      <RnView style={atoms.gap_sm}>
+        <FareRow
+          label="Trip distance"
+          value={distanceKm != null ? `${distanceKm.toFixed(1)} Km` : "—"}
+        />
+        <FareRow label="Estimated duration" value={duration ?? "—"} />
+        <FareRow label="Vehicle type" value={vehicleType ?? "—"} />
+        <FareRow label="Payment method" value={paymentMethod} />
+      </RnView>
+
+      <RnText style={[atoms.text_xs, { color: colors.gray }]}>
+        The final fare may vary based on actual distance, time, and any
+        applicable surcharges such as tolls or waiting time.
+      </RnText>
+      <RNPressable
+        onPress={onClose}
+        accessibilityRole="button"
+        style={[
+          s.p16,
+          s.alignCenter,
+          s.borderRadius_md,
+          { backgroundColor: colors.green_500 },
+        ]}
+      >
+        <RnText style={[atoms.text_md, { color: colors.bg_50 }]}>Got it</RnText>
+      </RNPressable>
+    </RnView>
+  );
+};
+
 const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
   ({ children }, ref) => {
     const { setActiveRideState } = useActiveRide();
     const { mutateAsync: cancelRideAsync } = useCancelRideRequest();
     const { colors } = useAppTheme();
     const insets = useSafeAreaInsets();
+    const sheet = useBottomSheet();
+    const { height: windowHeight } = useWindowDimensions();
     const activeRideSheetRef = React.useRef<TrueSheet>(null);
     const convoSheetRef = React.useRef<TrueSheet>(null);
     const { rideData, ride_status } = useActiveRideState();
-    const { animatedPosition } = useReanimatedTrueSheet();
+    const { animatedPosition, animatedDetent } = useReanimatedTrueSheet();
 
     const [plateWidth, setPlateWidth] = React.useState(0);
     const [sheetMounted, setSheetMounted] = React.useState(false);
 
     const fabAnimatedStyle = useAnimatedStyle(() => {
-      const y = -(height - animatedPosition.value);
-      const opacity = interpolate(y, [-550, -650], [1, 0], Extrapolation.CLAMP);
-      const scale = interpolate(y, [-550, -650], [1, 0.5], Extrapolation.CLAMP);
-      const translateY =
-        y + interpolate(y, [-550, -650], [0, 56 * 0.2], Extrapolation.CLAMP);
+      // Position the FAB so its bottom sits `FAB_GAP` above the sheet's top edge.
+      // Anchor from the window BOTTOM (`bottom: 0` on the view): `animatedPosition`
+      // and `windowHeight` share the same RN-window coordinate space (the provider
+      // seeds `animatedPosition` to `windowHeight` when the sheet is offscreen), so
+      // `windowHeight - animatedPosition` is the sheet's visible height regardless
+      // of status-bar / navigation-bar insets. Anchoring from `top: 0` instead is
+      // NOT inset-safe — it drifts by the system-bar height on real devices.
+      const translateY = -(windowHeight - animatedPosition.value) - FAB_GAP;
+
+      // Fade/scale on the 0–1 detent fraction (collapsed 0.5 → expanded 1) so the
+      // thresholds scale with the device instead of using fixed pixel heights.
+      const opacity = interpolate(
+        animatedDetent.value,
+        [COLLAPSED_DETENT, FAB_FADE_OUT_DETENT],
+        [1, 0],
+        Extrapolation.CLAMP,
+      );
+      const scale = interpolate(
+        animatedDetent.value,
+        [COLLAPSED_DETENT, FAB_FADE_OUT_DETENT],
+        [1, 0.5],
+        Extrapolation.CLAMP,
+      );
 
       return {
         opacity,
-        transform: [{ scale }, { translateY }],
+        transform: [{ translateY }, { scale }],
       };
     });
 
     const _open = React.useCallback(async () => {
-      try {
-        await activeRideSheetRef.current?.present(0);
-      } catch {}
+      activeRideSheetRef.current
+        ?.present()
+        .then(() => {
+          // setSheetMounted(true);
+          console.log("Active ride sheet presented");
+        })
+        .catch((err) => {
+          console.error("Error presenting active ride sheet:", err);
+        });
     }, []);
 
     const _close = React.useCallback(async () => {
-      try {
-        await activeRideSheetRef.current?.dismiss();
-      } catch {}
+      activeRideSheetRef.current
+        ?.dismiss()
+        .then(() => {
+          // setSheetMounted(false);
+          console.log("Active ride sheet dismissed");
+        })
+        .catch((err) => {
+          console.error("Error dismissing active ride sheet:", err);
+        });
     }, []);
 
     React.useImperativeHandle(
@@ -133,28 +269,98 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
       );
     }, [derived]);
 
-    const cancelRide = React.useCallback(async () => {
-      if (!rideData) return;
-      await _close();
-      try {
-        await cancelRideAsync({
-          note: "User cancelled",
-          reason: "changed mind",
-        });
-      } catch (err) {
-        console.error("Error cancelling ride:", err);
-      }
-      setActiveRideState({ type: "REMOVE-RIDE" });
-    }, [_close, cancelRideAsync, rideData, setActiveRideState]);
+    const _onFarePress = React.useCallback(() => {
+      sheet.present(
+        ({ dismiss }) => (
+          <FareDetailsContent
+            currency="KES"
+            fare={derived?.fare}
+            distanceKm={rideData?.estimated_distance}
+            duration={derived?.ride_duration}
+            vehicleType={rideData?.vehicle_type}
+            paymentMethod="Cash"
+            onClose={dismiss}
+          />
+        ),
+        {
+          detents: [0, "content"],
+          // This sheet is opened from inside a TrueSheet (a native presented
+          // sheet). The provider portal sits behind that native presentation,
+          // so present in a window-level native overlay to float above it.
+          nativeOverlay: true,
+          // Match the app / ride-sheet background instead of the default card.
+          surface: { backgroundColor: colors.background },
+          accessibilityLabel: "Fare details",
+          testID: "fare-details-sheet",
+        },
+      );
+    }, [
+      sheet,
+      colors.background,
+      derived?.fare,
+      derived?.ride_duration,
+      rideData?.estimated_distance,
+      rideData?.vehicle_type,
+    ]);
+
+    const cancelRide = React.useCallback(
+      async (reason: CancelReason, note: string) => {
+        if (!rideData) return;
+        await _close();
+        try {
+          await cancelRideAsync({
+            reason: reason.id,
+            reason_label: reason.label,
+            category: reason.category,
+            note,
+          });
+        } catch (err) {
+          console.error("Error cancelling ride:", err);
+        }
+        setActiveRideState({ type: "REMOVE-RIDE" });
+      },
+      [_close, cancelRideAsync, rideData, setActiveRideState],
+    );
+
+    // "Cancel Ride" first asks why (reason sheet); the ride is only cancelled
+    // from the sheet's Done — dismissing it any other way keeps the ride.
+    const _onCancelPress = React.useCallback(() => {
+      sheet.present(
+        ({ dismiss }) => (
+          <CancelRideReasonsContent
+            onDone={(reason, comments) => {
+              dismiss();
+              void cancelRide(reason, comments);
+            }}
+          />
+        ),
+        {
+          // Full-height: point detents are clamped natively to the below-
+          // status-bar cap, so the window height resolves to 100%.
+          detents: [0, height],
+          // Opened from inside the TrueSheet's native presentation, like the
+          // fare-details sheet above.
+          nativeOverlay: true,
+          surface: { backgroundColor: colors.background },
+          accessibilityLabel: "Why are you cancelling?",
+          testID: "cancel-ride-reasons-sheet",
+        },
+      );
+    }, [sheet, colors.background, cancelRide]);
 
     const _onCallButtonPress = React.useCallback(() => {
       makePhoneCall(rideData?.phone);
     }, [rideData?.phone]);
 
     const _onMessageButtonPress = React.useCallback(async () => {
-      try {
-        await convoSheetRef.current?.present();
-      } catch {}
+      convoSheetRef.current
+        ?.present()
+        .then(() => {
+          console.log("Conversation sheet presented");
+        })
+        .catch((err) => {
+          console.error("Error presenting conversation sheet:", err);
+        });
     }, []);
 
     React.useEffect(() => {
@@ -172,7 +378,7 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
               fabAnimatedStyle,
               {
                 position: "absolute",
-                height: 56,
+                height: FAB_HEIGHT,
                 flexDirection: "row",
                 justifyContent: "space-between",
                 alignSelf: "center",
@@ -436,7 +642,12 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
                   </RnView>
                 </RnView>
                 <RnView style={[s.flexDirectionRow, s.spaceBetween]}>
-                  <RnView style={[s.flexCol, atoms.gap_sm]}>
+                  <Pressable
+                    onPress={_onFarePress}
+                    accessibilityRole="button"
+                    accessibilityLabel="View fare details"
+                    style={[s.flexCol, atoms.gap_sm]}
+                  >
                     <RnView
                       style={[s.flexDirectionRow, s.alignCenter, atoms.gap_xs]}
                     >
@@ -451,7 +662,7 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
                     <RnText style={{ color: colors.text, fontSize: 14 }}>
                       KES {derived?.fare}
                     </RnText>
-                  </RnView>
+                  </Pressable>
                   <RnView style={[s.flexDirectionRow, atoms.gap_xs]}>
                     <Icon
                       name="HandCoins"
@@ -515,7 +726,7 @@ const ActiveRideRequestSheet = React.forwardRef<ActionSheetACTRef, Props>(
                     </Pressable>
                   ) : (
                     <Pressable
-                      onPress={cancelRide}
+                      onPress={_onCancelPress}
                       style={[s.p16, s.alignSelf, s.borderRadius_md]}
                     >
                       <RnText

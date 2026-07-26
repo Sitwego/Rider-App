@@ -1,13 +1,19 @@
 /**
- * Unit tests for the pure-TypeScript tracking engine only (src/tracking).
- * The engine has no react-native/expo imports, so it runs in plain Node —
- * no jest-expo preset or native mocks needed.
+ * Unit tests for pure-TypeScript modules that have no react-native/expo
+ * runtime imports, so they run in plain Node — no jest-expo preset or native
+ * mocks needed:
+ *   - src/tracking          (tracking engine)
+ *   - src/ui/BottomSheet    (the bottom-sheet registry/stack store)
+ *
+ * `isolatedModules` transpiles each file on its own (type-only imports are
+ * erased), so the store's `import type` references to react-native / the sheet
+ * library never pull those packages into the Node test runtime.
  *
  * @type {import('jest').Config}
  */
 module.exports = {
   testEnvironment: "node",
-  roots: ["<rootDir>/src/tracking"],
+  roots: ["<rootDir>/src/tracking", "<rootDir>/src/ui/BottomSheet"],
   transform: {
     "^.+\\.ts$": [
       "ts-jest",

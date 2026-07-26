@@ -63,7 +63,7 @@ public class OfferingDriverEvent implements OfferingDriverEventInterface {
 
     public void stop() {
         // channel is shared via GrpcChannelManager — do NOT shut it down here,
-        // as other services (RideEventService, RpcStreamingService) may still be using it.
+        // as RpcStreamingService (and its ride-events stream) may still be using it.
         retryExecutor.shutdownNow();
     }
 

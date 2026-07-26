@@ -5,7 +5,7 @@ import {
   useNativeState,
   type TextFieldRef,
 } from "@expo/ui/jetpack-compose";
-import { fillMaxWidth } from "@expo/ui/jetpack-compose/modifiers";
+import { fillMaxWidth, height } from "@expo/ui/jetpack-compose/modifiers";
 import Qs from "qs";
 // import { v4 as uuidv4 } from "uuid";
 import React, {
@@ -177,8 +177,7 @@ export const GooglePlacesAutocomplete = forwardRef<
 
   useEffect(() => {
     return () => _abortRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [_abortRequests]);
 
   useImperativeHandle(ref, () => ({
     setAddressText: (address: SetStateAction<string>) => {
@@ -278,7 +277,22 @@ export const GooglePlacesAutocomplete = forwardRef<
             request.setRequestHeader("Accept-Language", query.language);
           }
           request.setRequestHeader("Content-Type", "application/json");
-          request.send(JSON.stringify({ input: text }));
+          // Map the legacy `components: "country:ke"` query into the New API's
+          // includedRegionCodes so region filtering carries over.
+          const includedRegionCodes =
+            typeof query.components === "string"
+              ? query.components
+                  .split("|")
+                  .map((c: string) => c.split(":")[1])
+                  .filter(Boolean)
+              : undefined;
+          request.send(
+            JSON.stringify({
+              input: text,
+              ...(query.language ? { languageCode: query.language } : {}),
+              ...(includedRegionCodes?.length ? { includedRegionCodes } : {}),
+            }),
+          );
         } else {
           request.open(
             "GET",
@@ -382,7 +396,7 @@ export const GooglePlacesAutocomplete = forwardRef<
               backgroundColor: colors.bg_50,
               alignItems: "center",
               paddingHorizontal: 10,
-              paddingVertical: 6,
+              paddingVertical: 0,
               shadowColor: colors.gray_700,
               shadowOffset: {
                 width: 0,
@@ -404,7 +418,7 @@ export const GooglePlacesAutocomplete = forwardRef<
               value={textState}
               singleLine
               autoFocus={false}
-              modifiers={[fillMaxWidth()]}
+              modifiers={[fillMaxWidth(), height(44)]}
               keyboardOptions={{
                 autoCorrectEnabled: false,
                 capitalization: "none",

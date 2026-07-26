@@ -135,6 +135,13 @@ export function RideFairEstimateScreen({ navigation, route }: any) {
             latitude={coords[0].latitude}
             longitude={coords[0].longitude}
           />
+          {rideSearchState.stop ? (
+            <MapMaker
+              icon={require("../../../../assets/images/stop-black-location.png")}
+              latitude={rideSearchState.stop.lat}
+              longitude={rideSearchState.stop.lng}
+            />
+          ) : null}
           <MapMaker
             icon={require("../../../../assets/images/stop-location.png")}
             latitude={coords[coords.length - 1].latitude}
@@ -144,7 +151,7 @@ export function RideFairEstimateScreen({ navigation, route }: any) {
       );
     }
     return null;
-  }, [colors.green_400, rideSearchState.searchData]);
+  }, [colors.green_400, rideSearchState.searchData, rideSearchState.stop]);
 
   return (
     <RnView style={[{ marginTop: insets.top, flex: 1 }]}>

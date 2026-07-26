@@ -1,7 +1,12 @@
 import { PressableScale } from "pressto";
 import { Fragment, memo, useCallback, useState } from "react";
 import { StyleSheet } from "react-native";
-import { PlacePickerView, LocationResult } from "react-native-place-picker";
+import Config from "react-native-config";
+import {
+  PlacePickerView,
+  LocationResult,
+  ResolvedPlace,
+} from "react-native-place-picker";
 import {
   useAnimatedStyle,
   useSharedValue,
@@ -29,15 +34,34 @@ function LocationPicker({
   const insets = useSafeAreaInsets();
   const [selectedLocation, setSelectedLocation] =
     useState<LocationResult | null>(null);
+  const [resolvedPlace, setResolvedPlace] = useState<ResolvedPlace | null>(
+    null,
+  );
   const { sheetAnimatedStyle, show } = useBottomSheetAnimation(SHEET_HEIGHT);
 
   const handleLocationSelected = useCallback(
     (result: LocationResult) => {
       setSelectedLocation(result);
+      // Clear the previous POI label until the new pin position resolves,
+      // so the sheet never shows a name that's no longer under the pin.
+      setResolvedPlace(null);
       show();
     },
     [show],
   );
+
+  // Fires ~500ms after the pin settles: the nearest POI label (or the
+  // geocoded address when no POI lies within 40m of the pin).
+  const handlePlaceResolved = useCallback(
+    (place: ResolvedPlace) => {
+      setResolvedPlace(place);
+      show();
+    },
+    [show],
+  );
+
+  // Prefer the POI label; fall back to the reverse-geocoded address.
+  const displayLabel = resolvedPlace?.name ?? selectedLocation?.address ?? "";
 
   return (
     <Fragment>
@@ -46,7 +70,9 @@ function LocationPicker({
         longitude={pin_location?.longitude ?? 36.77701672444041}
         zoom={18.5}
         mapType="normal"
+        googleApiKey={Config.GOOGLE_MAPS_API_KEY ?? ""}
         onLocationSelected={handleLocationSelected}
+        onPlaceResolved={handlePlaceResolved}
         onError={(msg) => console.error(msg)}
         onMapReady={() => console.log("Map ready")}
         style={styles.map}
@@ -73,7 +99,7 @@ function LocationPicker({
             style={[atoms.text_xs, { color: colors.text }]}
             numberOfLines={1}
           >
-            {selectedLocation?.address ?? ""}
+            {displayLabel}
           </RnText>
         </RnView>
 
@@ -81,7 +107,13 @@ function LocationPicker({
           style={[styles.confirmButton, { backgroundColor: colors.primary }]}
           onPress={() => {
             if (selectedLocation && onLocationSelected) {
-              onLocationSelected(selectedLocation);
+              // Carry the POI label up when the pin resolved to one; keep the
+              // pin's own coordinates as the actual pickup point.
+              onLocationSelected({
+                ...selectedLocation,
+                name: resolvedPlace?.name ?? selectedLocation.address,
+                address: resolvedPlace?.address ?? selectedLocation.address,
+              });
             }
           }}
         >

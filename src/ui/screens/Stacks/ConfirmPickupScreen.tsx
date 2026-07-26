@@ -20,7 +20,7 @@ type Props = NativeStackScreenProps<
 >;
 
 export function ConfirmPickupScreen({ navigation, route }: Props) {
-  const { latitude, longitude, dropOff } = route.params;
+  const { latitude, longitude, dropOff, stop } = route.params;
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { dispatchRideSearchState } = useRideRequsetMoadal();
@@ -31,21 +31,28 @@ export function ConfirmPickupScreen({ navigation, route }: Props) {
       const country = parts[parts.length - 1];
       const confirmedPickup: PlaceType = {
         address: result.address,
-        name: result.address,
+        // POI label when the pin landed on one, else the address.
+        name: result.name || result.address,
         country: country ?? "",
         lat: result.latitude,
         lng: result.longitude,
       };
       dispatchRideSearchState({
         type: "SET-RIDE-SEARCH-RESULT",
-        payload: { pickup: confirmedPickup, dropOff, findingEstimates: true },
+        payload: {
+          pickup: confirmedPickup,
+          dropOff,
+          stop,
+          findingEstimates: true,
+        },
       });
       navigation.navigate("RideFairEstimateScreen", {
         pickup: confirmedPickup,
         dropOff,
+        stop,
       });
     },
-    [dispatchRideSearchState, dropOff, navigation],
+    [dispatchRideSearchState, dropOff, stop, navigation],
   );
 
   return (

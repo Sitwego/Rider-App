@@ -13,10 +13,40 @@ interface UseGooglePlacesDetailsProps {
   };
   fetchDetails?: boolean;
   autoFillOnNotFound?: boolean;
+  /** Use Places API (New) `GET /v1/places/{placeId}` instead of the legacy details endpoint. */
+  isNewPlacesAPI?: boolean;
   onPress?: (rowData: any, details: any) => void;
   onTimeout?: () => void;
   setStateText: (text: string) => void;
 }
+
+// Field mask for Places API (New) details — covers everything
+// saveLocationDetails consumes from the adapted legacy shape below.
+const NEW_DETAILS_FIELD_MASK =
+  "id,displayName,formattedAddress,location,addressComponents,adrFormatAddress,types";
+
+// Places API (New) returns a different shape than the legacy details endpoint.
+// Adapt it into the legacy `result` object that saveLocationDetails and
+// renderDescription already understand, so callers stay unchanged.
+const adaptNewPlaceDetails = (place: any) => ({
+  place_id: place.id,
+  id: place.id,
+  name: place.displayName?.text ?? "",
+  formatted_address: place.formattedAddress ?? "",
+  adr_address: place.adrFormatAddress ?? "",
+  geometry: {
+    location: {
+      lat: place.location?.latitude ?? 0,
+      lng: place.location?.longitude ?? 0,
+    },
+  },
+  address_components: (place.addressComponents ?? []).map((c: any) => ({
+    long_name: c.longText ?? "",
+    short_name: c.shortText ?? "",
+    types: c.types ?? [],
+  })),
+  types: place.types ?? [],
+});
 
 const setRequestHeaders = (
   request: XMLHttpRequest,
@@ -46,6 +76,7 @@ export const useGooglePlacesDetails = ({
   requestUrl,
   fetchDetails,
   autoFillOnNotFound,
+  isNewPlacesAPI,
   onTimeout,
   onPress,
   setStateText,
@@ -93,11 +124,18 @@ export const useGooglePlacesDetails = ({
         if (request.status === 200) {
           try {
             const responseJSON = JSON.parse(request.responseText);
-            if (responseJSON.status === "OK" && responseJSON.result) {
+            // Places API (New) returns the place object directly on 200;
+            // the legacy endpoint wraps it in { status, result }.
+            const result = isNewPlacesAPI
+              ? adaptNewPlaceDetails(responseJSON)
+              : responseJSON.status === "OK"
+                ? responseJSON.result
+                : null;
+            if (result) {
               onBlur?.(null);
               setStateText(renderDescription(rowData));
               delete rowData.isLoading;
-              onPress?.(rowData, responseJSON.result);
+              onPress?.(rowData, result);
             } else {
               if (autoFillOnNotFound) {
                 setStateText(renderDescription(rowData));
@@ -114,19 +152,31 @@ export const useGooglePlacesDetails = ({
         }
       };
 
-      request.open(
-        "GET",
-        `${url}/place/details/json?` +
-          Qs.stringify({
-            key: query?.key,
-            placeid: rowData.place_id,
-            language: query?.language,
-            ...GooglePlacesDetailsQuery,
-          }),
-      );
-      request.withCredentials = requestShouldUseWithCredentials;
-      setRequestHeaders(request, getRequestHeaders(requestUrl));
-      request.send();
+      if (isNewPlacesAPI) {
+        request.open(
+          "GET",
+          `${url}/v1/places/${rowData.place_id}?` +
+            Qs.stringify({ key: query?.key, languageCode: query?.language }),
+        );
+        request.withCredentials = requestShouldUseWithCredentials;
+        setRequestHeaders(request, getRequestHeaders(requestUrl));
+        request.setRequestHeader("X-Goog-FieldMask", NEW_DETAILS_FIELD_MASK);
+        request.send();
+      } else {
+        request.open(
+          "GET",
+          `${url}/place/details/json?` +
+            Qs.stringify({
+              key: query?.key,
+              placeid: rowData.place_id,
+              language: query?.language,
+              ...GooglePlacesDetailsQuery,
+            }),
+        );
+        request.withCredentials = requestShouldUseWithCredentials;
+        setRequestHeaders(request, getRequestHeaders(requestUrl));
+        request.send();
+      }
     },
     [
       abortRequests,
@@ -141,6 +191,7 @@ export const useGooglePlacesDetails = ({
       renderDescription,
       onPress,
       autoFillOnNotFound,
+      isNewPlacesAPI,
     ],
   );
 

@@ -1,23 +1,29 @@
+import type { PlaceType } from "../../lib/placesTypes";
 import type { RouteProp } from "@react-navigation/native";
 import type {
   NativeStackNavigationProp,
   NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 
-import type { PlaceType } from "../../lib/placesTypes";
-
 // ---------------------------------------------------------------------------
 // Shared stack param list
 // Contains all screens registered in sharedStackScreens()
 // ---------------------------------------------------------------------------
 export type SharedStackParamList = {
-  RideFairEstimateScreen: { pickup: PlaceType; dropOff: PlaceType };
+  RideFairEstimateScreen: {
+    pickup: PlaceType;
+    dropOff: PlaceType;
+    /** Optional intermediate stop (Pickup → Stop → DropOff), max one. */
+    stop?: PlaceType;
+  };
   RideDetailsScreen: { rideId: string };
   RatingScreen: RatingScreenParams;
   ConfirmPickupScreen: {
     latitude: number;
     longitude: number;
     dropOff: PlaceType;
+    /** Optional intermediate stop (Pickup → Stop → DropOff), max one. */
+    stop?: PlaceType;
   };
 };
 

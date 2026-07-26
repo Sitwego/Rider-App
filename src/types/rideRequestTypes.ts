@@ -45,6 +45,9 @@ export type RideRequestData = {
   verified?: boolean;
   from?: LocationInfo;
   to?: LocationInfo;
+  /** Intermediate stops in visit order (Pickup → stops → DropOff); empty or
+   * absent for direct rides. */
+  stops?: LocationInfo[];
   ride_polyline?: RidePolylineGeoData;
   /** Latest raw GPS fix for the driver, fed by "locationChange" events. */
   driver_location?: DriverLocationFix;

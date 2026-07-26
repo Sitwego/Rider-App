@@ -13,7 +13,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EmergencyButton } from "~/components/EmergencyButton";
 import Icon from "~/components/Icons";
 import RnMapView from "~/components/RnMaps";
-import { DestinationMarker, DriverMarker } from "~/components/RnMaps/MapMarker";
+import {
+  DestinationMarker,
+  DriverMarker,
+  StopMarker,
+} from "~/components/RnMaps/MapMarker";
 import { MapPolyline } from "~/components/RnMaps/MapPolyline";
 import { SmoothDriverMarker } from "~/components/RnMaps/SmoothDriverMarker";
 import { TrackingDemo } from "~/components/TrackingDemo";
@@ -88,6 +92,17 @@ const RideMapView: React.FC = () => {
   console.log("RideMapView render: driverPoint", driverPoint, "route coords", {
     getPolylineCoordinates,
   });
+  // Intermediate stops (Pickup → stops → DropOff) from the accepted-ride
+  // payload; the route polyline already bends through them, this just puts a
+  // marker at each so the waypoint is visible.
+  const stopPoints = useMemo<Point[]>(() => {
+    const raw = rideData?.stops;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((s) => typeof s?.lat === "number" && typeof s?.lon === "number")
+      .map((s) => ({ latitude: s.lat, longitude: s.lon }));
+  }, [rideData?.stops]);
+
   const ride_duration = useMemo(() => {
     if (!rideData) return "";
     // Pre-trip the destination marker sits at the pickup point, so show the
@@ -157,7 +172,6 @@ const RideMapView: React.FC = () => {
   const handleDriverFrame = useCallback(
     (frame: { latitude: number; longitude: number; heading: number }) => {
       if (!hasDriverFixRef.current) return;
-      console.log("handleDriverFrame", frame);
       const endpoint = endpointRef.current;
       const zoom = endpoint
         ? calcDynamicZoom(
@@ -256,6 +270,14 @@ const RideMapView: React.FC = () => {
               onFrame={handleDriverFrame}
               getCameraHeading={getCameraHeading}
             />
+            {/* Intermediate stop markers */}
+            {stopPoints.map((point, index) => (
+              <StopMarker
+                key={`stop-${index}`}
+                label={stopPoints.length > 1 ? `Stop ${index + 1}` : "Stop"}
+                {...point}
+              />
+            ))}
             {/* Destination Maker */}
             {destination && (
               <DestinationMarker
@@ -286,11 +308,15 @@ const RideMapView: React.FC = () => {
 // Dev-only: replace the home screen with the vehicle-tracking demo
 // (simulated GPS along src/tracking/testing/mockRoute). Flip to false
 // (or delete the flag and wrapper below) when done testing.
-// const SHOW_TRACKING_DEMO = __DEV__ && true;
+const SHOW_TRACKING_DEMO = __DEV__ && true;
 
-export const RiderHomeScreen: React.FC<any> = (props) => (
-  <RiderHome {...props} />
-);
+export const RiderHomeScreen: React.FC<any> = (props) => {
+  // if (SHOW_TRACKING_DEMO) {
+  //   return <TrackingDemo />;
+  // }
+
+  return <RiderHome {...props} />;
+};
 RiderHomeScreen.displayName = "RiderHomeScreen";
 
 const RiderHome: React.FC<any> = (props) => {

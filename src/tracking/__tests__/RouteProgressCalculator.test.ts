@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 
 import {
+  hasMinimumDistinctPoints,
   headingAtProgress,
   prepareRoute,
   progressToLatLng,
@@ -53,6 +54,35 @@ describe("prepareRoute", () => {
     const route = prepareRoute("_p~iF~ps|U_ulLnnqC_mqNvxq`@");
     expect(route.points).toHaveLength(3);
     expect(route.totalLength).toBeGreaterThan(100_000);
+  });
+});
+
+describe("hasMinimumDistinctPoints", () => {
+  it("rejects routes prepareRoute would throw on", () => {
+    expect(hasMinimumDistinctPoints([])).toBe(false);
+    expect(hasMinimumDistinctPoints([{ latitude: 0, longitude: 0 }])).toBe(
+      false,
+    );
+    // Enough vertices, but all identical — the production crash case.
+    expect(
+      hasMinimumDistinctPoints([
+        { latitude: 1, longitude: 1 },
+        { latitude: 1, longitude: 1 },
+        { latitude: 1, longitude: 1 },
+      ]),
+    ).toBe(false);
+  });
+
+  it("accepts routes with at least 2 distinct points", () => {
+    expect(hasMinimumDistinctPoints(northRoute(2))).toBe(true);
+    expect(
+      hasMinimumDistinctPoints([
+        { latitude: 0, longitude: 0 },
+        { latitude: 0, longitude: 0 },
+        { latitude: 0.001, longitude: 0 },
+      ]),
+    ).toBe(true);
+    expect(hasMinimumDistinctPoints("_p~iF~ps|U_ulLnnqC_mqNvxq`@")).toBe(true);
   });
 });
 

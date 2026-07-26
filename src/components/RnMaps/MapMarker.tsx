@@ -105,6 +105,44 @@ export function DriverMarker(props?: Point) {
   );
 }
 
+/** Intermediate-stop pill — same look as the destination marker, labeled
+ * "Stop" (numbered when the ride has several). */
+export const StopMarker: React.FC<Point & { label?: string }> = (props) => {
+  const { fonts, colors } = useAppTheme();
+  const { label, ...rest } = props;
+  return (
+    <Marker flat anchor={{ x: 0.3, y: 0.6 }} coordinate={rest}>
+      <RnView
+        style={[
+          s.flexDirectionRow,
+          s.gap4,
+          s.spaceBetween,
+          s.alignCenter,
+          s.px6,
+          s.py5,
+          s.borderRadius_full,
+          { backgroundColor: colors.bg_100 },
+        ]}
+      >
+        <Icon
+          name="CircleDot"
+          size={22}
+          color={colors.green_400}
+          strokeWidth={4}
+        />
+        <RnText
+          style={[
+            atoms.text_xs,
+            { color: colors.text, fontFamily: fonts.heavy.fontFamily },
+          ]}
+        >
+          {label ?? "Stop"}
+        </RnText>
+      </RnView>
+    </Marker>
+  );
+};
+
 export const DestinationMarker: React.FC<Point & { ride_duration: string }> = (
   props,
 ) => {

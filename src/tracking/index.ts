@@ -35,6 +35,7 @@ export {
   predictProgress,
 } from "./PredictionEngine";
 export {
+  hasMinimumDistinctPoints,
   headingAtProgress,
   prepareRoute,
   progressToLatLng,

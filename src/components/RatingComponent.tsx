@@ -16,6 +16,7 @@ import RnTextInput from "~/ui/RnTextInput";
 import { RnView } from "~/ui/RnView";
 import { useAppTheme } from "~/ui/theme";
 import { atoms } from "~/ui/theme/atoms";
+import { formatPrice } from "~/utils/math/numbers";
 
 import type {
   RatingScreenNavigationProp,
@@ -139,7 +140,7 @@ export default function RatingComponent() {
               Estimated fare
             </RnText>
             <RnText style={[atoms.text_sm]}>
-              {fare.components.estimated_fare}
+              {formatPrice(fare.components.estimated_fare)}
             </RnText>
           </RnView>
           {extraCharges.map(([label, value]) => (
@@ -147,7 +148,7 @@ export default function RatingComponent() {
               <RnText style={[atoms.text_sm, { color: colors.gray_600 }]}>
                 {label}
               </RnText>
-              <RnText style={[atoms.text_sm]}>{value}</RnText>
+              <RnText style={[atoms.text_sm]}>{formatPrice(value!)}</RnText>
             </RnView>
           ))}
           <RnView

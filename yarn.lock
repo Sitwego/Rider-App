@@ -2879,10 +2879,10 @@
   dependencies:
     use-sync-external-store "^1.5.0"
 
-"@lodev09/react-native-true-sheet@3.11.0-beta.15":
-  version "3.11.0-beta.15"
-  resolved "https://registry.yarnpkg.com/@lodev09/react-native-true-sheet/-/react-native-true-sheet-3.11.0-beta.15.tgz#f2c9c229fd719dfc54670785d7791630b2c5b6dc"
-  integrity sha512-dyVWub5IpP3JNvfe3n6Z01waPLr8HurdR9XgAQhds2KpWEatjLm9mGgF9yL2S+bUU5cfpZVjj2sqvtIcoXQz3g==
+"@lodev09/react-native-true-sheet@^3.11.1":
+  version "3.11.1"
+  resolved "https://registry.yarnpkg.com/@lodev09/react-native-true-sheet/-/react-native-true-sheet-3.11.1.tgz#6a8cb5b415041052c64263f25b22ad0ddabd0bb0"
+  integrity sha512-bUtNLE/TN+je7X8bPEc3tVJg8nZLGV1nM6Qv/8qE69CcqK0lwhsTOnEof+Mb3KWBNbDNrMQSDj4F2BkOmJzMAg==
 
 "@napi-rs/wasm-runtime@^0.2.11":
   version "0.2.12"
@@ -3512,6 +3512,11 @@
   integrity sha512-V4BG07kuYSUkTCSBHG8G8TNhM+F19jXFWnQtzj+we8DrkpSBCee9Z3Ms8yiGer/dlmhe35/Xdgyo3/0rQKg7YA==
   dependencies:
     "@sinonjs/commons" "^3.0.0"
+
+"@swmansion/react-native-bottom-sheet@^0.16.1":
+  version "0.16.1"
+  resolved "https://registry.yarnpkg.com/@swmansion/react-native-bottom-sheet/-/react-native-bottom-sheet-0.16.1.tgz#bed511d5191d257ea3db779e07e9f326f4928ff0"
+  integrity sha512-ZLi6PtKSOEOXQyafAV+fN8sueUr5hCBcjbOGPuryAIuvXI3s9V8btV1CuTUuJOs6X71tfoyTV23jXS5nCdaMkQ==
 
 "@tanstack/query-async-storage-persister@^5.81.2":
   version "5.81.2"

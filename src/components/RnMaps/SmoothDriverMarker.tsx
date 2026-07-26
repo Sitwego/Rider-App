@@ -9,6 +9,7 @@
 import React, { memo, useEffect, useMemo, useRef } from "react";
 
 import { useVehicleAnimation } from "~/hooks/useVehicleAnimation";
+import { hasMinimumDistinctPoints } from "~/tracking";
 import { Point } from "~/types/geoTypes";
 
 import { VehicleMarker } from "../VehicleMarker";
@@ -76,8 +77,10 @@ function SmoothDriverMarkerComponent({
   }, [route]);
 
   // (Re)create the vehicle only when the route content actually changes.
+  // Length alone is not enough: prepareRoute() throws when the points are
+  // not distinct (e.g. driver already at the destination → [A, A]).
   useEffect(() => {
-    if (routeRef.current.length >= 2) {
+    if (hasMinimumDistinctPoints(routeRef.current)) {
       setVehicleRoute(vehicleId, routeRef.current);
     }
   }, [signature, vehicleId, setVehicleRoute]);
