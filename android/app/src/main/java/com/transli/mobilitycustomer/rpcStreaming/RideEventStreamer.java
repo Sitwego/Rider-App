@@ -1,11 +1,10 @@
 package com.transli.mobilitycustomer.rpcStreaming;
 
-import android.app.Service;
-import android.content.Intent;
-import android.os.IBinder;
+import android.content.Context;
 import android.util.Log;
 
 import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.transli.mobilitycustomer.GrpcChannelManager;
 import com.transli.mobilitycustomer.SitwegoMainModule;
@@ -15,47 +14,139 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
-import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
+import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import rides_events.RideEventServiceGrpc;
 import rides_events.RideEvents;
 
-public class RideEventService extends Service implements RideEventInterface {
-    public static final String TAG = "RideEventService";
-    private ManagedChannel rpcChannel;
-    private String token;
-    private RideEventServiceGrpc.RideEventServiceStub rideEventServiceStub;
-    private final ScheduledExecutorService retryExecutor = Executors.newSingleThreadScheduledExecutor();
+/**
+ * Hosts the rider-events gRPC stream inside {@link RpcStreamingService} so a
+ * single foreground service (and a single notification) covers both the
+ * location stream and critical ride events. Not an Android Service — its
+ * lifecycle is owned by the host service: {@link #ensureStarted()} from
+ * onStartCommand, {@link #stop()} from onDestroy.
+ */
+class RideEventStreamer implements RideEventInterface {
+    private static final String TAG = "RideEventStreamer";
 
-    public RideEventService() {
+    private final Context appContext;
+    private final ScheduledExecutorService retryExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final AtomicInteger retryAttempt = new AtomicInteger();
+    private volatile boolean stopped;
+    private RiderEventsResponseObserver activeObserver;
+    private StreamObserver<RideEvents.RiderEventRequest> activeRequestObserver;
+    private ScheduledFuture<?> pendingRetry;
+
+    RideEventStreamer(Context context) {
+        this.appContext = context.getApplicationContext();
     }
 
-    private void start(){
-        rpcChannel = GrpcChannelManager.getChannel(getApplicationContext());
-        token = GrpcChannelManager.getLatestTokenFromStorage();
-        if (rpcChannel == null || token == null) {
-            Log.w(TAG, "start: missing channel or token, stopping");
-            stopSelf();
+    /**
+     * Open the stream if one isn't already active. Safe to call on every
+     * onStartCommand — repeated calls while a stream is up are no-ops, so we
+     * never stack a second stream (the server kicks the older one and the
+     * dueling retries never converge).
+     */
+    synchronized void ensureStarted() {
+        if (stopped) {
             return;
         }
-        rideEventServiceStub = RideEventServiceGrpc.newStub(rpcChannel);
+        if (activeObserver != null) {
+            Log.d(TAG, "ensureStarted: stream already active, not reopening");
+            return;
+        }
+        start();
+    }
+
+    private synchronized void start() {
+        if (stopped) {
+            return;
+        }
+        if (pendingRetry != null) {
+            pendingRetry.cancel(false);
+            pendingRetry = null;
+        }
+        cancelActiveStream("superseded by a new stream");
+        ManagedChannel rpcChannel = GrpcChannelManager.getChannel(appContext);
+        // User id from MMKV — sent as rider_id on the stream. Auth itself travels
+        // in the channel's header interceptor, not in this request.
+        String riderId = GrpcChannelManager.getLatestTokenFromStorage();
+        if (rpcChannel == null || riderId == null) {
+            // Init race (MMKV not ready yet) — retry with backoff rather than
+            // giving up; the host service outlives this state.
+            scheduleRetry("missing channel or rider id");
+            return;
+        }
+        RideEventServiceGrpc.RideEventServiceStub stub = RideEventServiceGrpc.newStub(rpcChannel);
         Log.d(TAG, "start: opening new connection stream");
         RiderEventsResponseObserver riderEventsResponseObserver = new RiderEventsResponseObserver(this);
-        StreamObserver<RideEvents.RiderEventRequest> riderEventRequestStreamObserver = rideEventServiceStub.streamRiderEvents(
+        StreamObserver<RideEvents.RiderEventRequest> riderEventRequestStreamObserver = stub.streamRiderEvents(
                 riderEventsResponseObserver
         );
+        activeObserver = riderEventsResponseObserver;
+        activeRequestObserver = riderEventRequestStreamObserver;
         riderEventsResponseObserver.startConnection(
                 riderEventRequestStreamObserver,
-                token,
+                riderId,
                 "token"
         );
+    }
+
+    /**
+     * Detach the current observer (so its terminal callback can't schedule a
+     * competing retry) and cancel the underlying call.
+     */
+    private synchronized void cancelActiveStream(String reason) {
+        if (activeObserver != null) {
+            activeObserver.detach();
+        }
+        if (activeRequestObserver instanceof ClientCallStreamObserver<?> call) {
+            call.cancel(reason, null);
+        }
+        activeObserver = null;
+        activeRequestObserver = null;
+    }
+
+    private synchronized void clearActiveStream() {
+        activeObserver = null;
+        activeRequestObserver = null;
+    }
+
+    /** Permanently stop: cancel the stream and shut the retry executor down. */
+    synchronized void stop() {
+        stopped = true;
+        if (pendingRetry != null) {
+            pendingRetry.cancel(false);
+            pendingRetry = null;
+        }
+        cancelActiveStream("streamer stopped");
+        retryExecutor.shutdownNow();
+    }
+
+    private void scheduleRetry(String why) {
+        if (stopped) {
+            return;
+        }
+        int attempt = retryAttempt.getAndIncrement();
+        long delaySec = Math.min(30L, 1L << Math.min(attempt, 5));
+        Log.d(TAG, why + " — retrying in " + delaySec + "s (attempt " + (attempt + 1) + ")");
+        try {
+            synchronized (this) {
+                pendingRetry = retryExecutor.schedule(this::start, delaySec, TimeUnit.SECONDS);
+            }
+        } catch (RejectedExecutionException e) {
+            // Executor already shut down — a terminal callback raced stop().
+            Log.w(TAG, "scheduleRetry: executor shut down, dropping retry");
+        }
     }
 
     private boolean isRetriable(Throwable t) {
@@ -63,7 +154,9 @@ public class RideEventService extends Service implements RideEventInterface {
             Status.Code code = sre.getStatus().getCode();
             Log.d(TAG, "isRetriable: code=" + code + " desc=" + sre.getStatus().getDescription());
             String desc = sre.getStatus().getDescription();
-            return (code == Status.Code.INTERNAL || (code == Status.Code.UNAVAILABLE && !Objects.equals(desc, "Channel shutdownNow invoked"))) ||
+            // UNKNOWN is what a server-side panic/restart surfaces as — mid-ride
+            // that must be retried, not treated as fatal.
+            return (code == Status.Code.INTERNAL || code == Status.Code.UNKNOWN || (code == Status.Code.UNAVAILABLE && !Objects.equals(desc, "Channel shutdownNow invoked"))) ||
                     (containsAny(desc,
                             new String[]{
                                     "Rst Stream",
@@ -82,31 +175,6 @@ public class RideEventService extends Service implements RideEventInterface {
         return false;
     }
 
-    private void watchChannelState(ManagedChannel channel) {
-        ConnectivityState state = channel.getState(false);
-        Log.d(TAG, "Initial channel state: " + state);
-
-        channel.notifyWhenStateChanged(state, () -> {
-            ConnectivityState newState = channel.getState(false);
-            Log.d(TAG, "Channel state changed to: " + newState);
-
-            if (newState == ConnectivityState.IDLE){
-                Log.d(TAG, "Channel is idle. Forcing reconnection...");
-                channel.getState(true);
-            }
-
-            if (newState != ConnectivityState.SHUTDOWN) {
-                watchChannelState(channel);
-            }
-        });
-    }
-
-    /**
-     * Check if the string contains any of the substrings
-     * @param description string
-     * @param substrings string array
-     * @return boolean
-     */
     private boolean containsAny(String description, String[] substrings) {
         if (description == null) {
             return false;
@@ -119,13 +187,13 @@ public class RideEventService extends Service implements RideEventInterface {
         return false;
     }
 
-    private WritableMap jsEvent(RideEvents.RideEvent event){
+    private WritableMap jsEvent(RideEvents.RideEvent event) {
         try {
             return (WritableMap) ThreadUtils
                     .submitToExecutor((Callable<?>) () -> {
                         WritableMap msg = Arguments.createMap();
                         WritableMap eventPayload = Arguments.createMap();
-                        switch (event.getEventPayloadCase()){
+                        switch (event.getEventPayloadCase()) {
                             case RIDE_CANCEL -> {
                                 RideEvents.RideCancelEvent rideCancel = event.getRideCancel();
                                 eventPayload.putString("reason", rideCancel.getReason());
@@ -178,6 +246,35 @@ public class RideEventService extends Service implements RideEventInterface {
                                 eventPayload.putString("driver_name", driverInfo.getName());
                                 eventPayload.putString("driver_id", driverInfo.getDriverId());
                                 eventPayload.putString("licence_plate_no", driverInfo.getLicensePlate());
+                                WritableArray stops = Arguments.createArray();
+                                for (RideEvents.Location stop : rideStart.getStopsList()) {
+                                    WritableMap stopMap = Arguments.createMap();
+                                    stopMap.putDouble("lat", stop.getLatitude());
+                                    stopMap.putDouble("lng", stop.getLongitude());
+                                    stopMap.putString("address", stop.getAddress());
+                                    stops.pushMap(stopMap);
+                                }
+                                eventPayload.putArray("stops", stops);
+                            }
+                            case STOP_ADDED -> {
+                                RideEvents.StopAddedEvent stopAdded = event.getStopAdded();
+                                RideEvents.Location stop = stopAdded.getStop();
+                                eventPayload.putDouble("stop_lat", stop.getLatitude());
+                                eventPayload.putDouble("stop_lng", stop.getLongitude());
+                                eventPayload.putString("stop_address", stop.getAddress());
+                                eventPayload.putDouble("old_fare", stopAdded.getOldFare());
+                                eventPayload.putDouble("new_fare", stopAdded.getNewFare());
+                                eventPayload.putDouble("added_distance_km", stopAdded.getAddedDistanceKm());
+                                eventPayload.putLong("added_duration_seconds", stopAdded.getAddedDurationSeconds());
+                                // (lon, lat) pairs — same shape as the REST line_str polylines.
+                                WritableArray newRoute = Arguments.createArray();
+                                for (RideEvents.RoutePoint point : stopAdded.getNewRouteList()) {
+                                    WritableArray pair = Arguments.createArray();
+                                    pair.pushDouble(point.getLongitude());
+                                    pair.pushDouble(point.getLatitude());
+                                    newRoute.pushArray(pair);
+                                }
+                                eventPayload.putArray("new_route", newRoute);
                             }
                             case DRIVER_ARRIVED -> {
                                 RideEvents.DriverArrivedEvent driverArrived = event.getDriverArrived();
@@ -202,150 +299,95 @@ public class RideEventService extends Service implements RideEventInterface {
     }
 
     @Override
-    public IBinder onBind(Intent intent) {
-        return  null;
-    }
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        Log.d(TAG, "onCreate");
-        // Ensure the manager (and its MMKV handle) is ready in this process — the
-        // system can recreate this sticky service without the React host resuming.
-        GrpcChannelManager.init();
-        rpcChannel = GrpcChannelManager.getChannel(getApplicationContext());
-        if (rpcChannel == null) {
-            // No token yet. Don't watch state on a null channel (NPE); onStartCommand
-            // also guards on a null channel and stops the service.
-            Log.w(TAG, "onCreate: gRPC channel unavailable (no token). Service will stop.");
+    public void onError(Throwable e) {
+        if (stopped) {
             return;
         }
-        watchChannelState(rpcChannel);
-        token = GrpcChannelManager.getLatestTokenFromStorage();
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "onStartCommand: channel=" + (rpcChannel != null ? "ok" : "null") + " token=" + (token != null ? "ok" : "null"));
-        if (rpcChannel != null && token != null){
-            rideEventServiceStub = RideEventServiceGrpc.newStub(rpcChannel);
-            start();
-        } else {
-            Log.w(TAG, "onStartCommand: missing channel or token, stopping self");
-            stopSelf();
-        }
-        return START_STICKY;
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        Log.w(TAG, "onDestroy");
-        retryExecutor.shutdownNow();
-        rpcChannel = null;
-    }
-
-    /**
-     * @param e Throwable error
-     */
-    @Override
-    public void onError(Throwable e) {
+        clearActiveStream();
         if (isRetriable(e)) {
-            Log.e(TAG, "Retrying GRPC Connection  " + e.toString());
-            retryExecutor.schedule(this::start, 5, TimeUnit.SECONDS);
+            Log.e(TAG, "Retrying GRPC Connection  " + e);
+            scheduleRetry("stream failed");
         } else {
-            Log.e(TAG, "Non-recoverable error!!!: " + e);
-            stopSelf();
+            // Not fatal for the host service — the next ensureStarted()
+            // (sticky restart or a new ride's start command) reopens it.
+            Log.e(TAG, "Non-recoverable error, stream stays down: " + e);
         }
     }
 
-    /**
-     * @param rideEvent RideEvent message
-     */
     @Override
     public void onMessage(RideEvents.RideEvent rideEvent) {
-        WritableMap jsEvent = jsEvent(rideEvent);
-        Log.i(TAG, "onMessage [" + rideEvent.getEventType() + "] rideId=" + rideEvent.getRideId() + " driverId=" + rideEvent.getDriverId() + " payload=" + jsEvent);
-        SitwegoMainModule.sendJsEvent("rideEvent", jsEvent);
+        retryAttempt.set(0);
+        try {
+            WritableMap jsEvent = jsEvent(rideEvent);
+            Log.i(TAG, "onMessage [" + rideEvent.getEventType() + "] rideId=" + rideEvent.getRideId() + " driverId=" + rideEvent.getDriverId() + " payload=" + jsEvent);
+            SitwegoMainModule.sendJsEvent("rideEvent", jsEvent);
+        } catch (RuntimeException e) {
+            // A JS-delivery failure (e.g. React context torn down while the app
+            // is backgrounded) must not escape into gRPC's onNext — gRPC would
+            // cancel the stream and the CANCELLED close would kill it.
+            Log.e(TAG, "onMessage: failed to deliver event to JS, dropping " + rideEvent.getEventType(), e);
+        }
     }
 
-    /**
-     *
-     */
     @Override
     public void onComplete() {
-        Log.d(TAG, "onComplete: stream closed by server, retrying in 1s");
-        retryExecutor.schedule(this::start, 1, java.util.concurrent.TimeUnit.SECONDS);
+        if (stopped) {
+            return;
+        }
+        clearActiveStream();
+        scheduleRetry("stream closed by server");
     }
 }
 
 class RiderEventsResponseObserver implements StreamObserver<RideEvents.RideEvent> {
     private final RideEventInterface rideEventInterface;
+    private volatile boolean detached;
     StreamObserver<RideEvents.RiderEventRequest> riderEventRequestStreamObserver;
 
     public RiderEventsResponseObserver(RideEventInterface rideEventInterface) {
         this.rideEventInterface = rideEventInterface;
     }
 
-    public void startConnection(StreamObserver<RideEvents.RiderEventRequest> riderEventRequestStreamObserver, String rideId, String token) {
+    /**
+     * Stop forwarding callbacks. Called when this stream is superseded or the
+     * streamer is stopped — gRPC will still deliver the terminal callback for
+     * the cancelled call, and it must not reach a dead streamer (whose retry
+     * executor is already terminated).
+     */
+    void detach() {
+        detached = true;
+    }
+
+    public void startConnection(StreamObserver<RideEvents.RiderEventRequest> riderEventRequestStreamObserver, String riderId, String token) {
         this.riderEventRequestStreamObserver = riderEventRequestStreamObserver;
         riderEventRequestStreamObserver.onNext(RideEvents.RiderEventRequest.newBuilder()
-                        .setRiderId(rideId)
+                        .setRiderId(riderId)
                         .setSessionToken(token)
                 .build());
 
     }
 
-    /**
-     * Receives a value from the stream.
-     *
-     * <p>Can be called many times but is never called after {@link #onError(Throwable)} or {@link
-     * #onCompleted()} are called.
-     *
-     * <p>Unary calls must invoke onNext at most once.  Clients may invoke onNext at most once for
-     * server streaming calls, but may receive many onNext callbacks.  Servers may invoke onNext at
-     * most once for client streaming calls, but may receive many onNext callbacks.
-     *
-     * <p>If an exception is thrown by an implementation the caller is expected to terminate the
-     * stream by calling {@link #onError(Throwable)} with the caught exception prior to
-     * propagating it.
-     *
-     * @param value the value passed to the stream
-     */
     @Override
     public void onNext(RideEvents.RideEvent value) {
+        if (detached) {
+            return;
+        }
         this.rideEventInterface.onMessage(value);
     }
 
-    /**
-     * Receives a terminating error from the stream.
-     *
-     * <p>May only be called once and if called it must be the last method called. In particular if an
-     * exception is thrown by an implementation of {@code onError} no further calls to any method are
-     * allowed.
-     *
-     * <p>{@code t} should be a {@link StatusException} or {@link
-     * StatusRuntimeException}, but other {@code Throwable} types are possible. Callers should
-     * generally convert from a {@link Status} via {@link Status#asException()} or
-     * {@link Status#asRuntimeException()}. Implementations should generally convert to a
-     * {@code Status} via {@link Status#fromThrowable(Throwable)}.
-     *
-     * @param t the error occurred on the stream
-     */
     @Override
     public void onError(Throwable t) {
+        if (detached) {
+            return;
+        }
         this.rideEventInterface.onError(t);
     }
 
-    /**
-     * Receives a notification of successful stream completion.
-     *
-     * <p>May only be called once and if called it must be the last method called. In particular if an
-     * exception is thrown by an implementation of {@code onCompleted} no further calls to any method
-     * are allowed.
-     */
     @Override
     public void onCompleted() {
+        if (detached) {
+            return;
+        }
         this.rideEventInterface.onComplete();
     }
 }

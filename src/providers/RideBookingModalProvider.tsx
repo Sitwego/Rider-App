@@ -32,6 +32,8 @@ export type Action =
 export type RSState = {
   readonly pickup: any;
   readonly dropOff: any;
+  /** Optional intermediate stop (Pickup → Stop → DropOff), max one. */
+  readonly stop?: any;
   findingEstimates: boolean;
   searchData?: RideSearchType;
 };
@@ -48,6 +50,7 @@ const reducers = (state: RSState, action: Action): RSState => {
       return {
         pickup: undefined,
         dropOff: undefined,
+        stop: undefined,
         findingEstimates: false,
       };
     }
@@ -73,6 +76,8 @@ const reducers = (state: RSState, action: Action): RSState => {
 type RideSearchState = {
   pickup: any;
   dropOff: any;
+  /** Optional intermediate stop (Pickup → Stop → DropOff), max one. */
+  stop?: any;
   findingEstimates: boolean;
   searchData?: RideSearchType;
 };

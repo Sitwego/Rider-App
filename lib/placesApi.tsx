@@ -5,7 +5,7 @@ import {
   useNativeState,
   type TextFieldRef,
 } from "@expo/ui/jetpack-compose";
-import { fillMaxWidth } from "@expo/ui/jetpack-compose/modifiers";
+import { fillMaxWidth, height } from "@expo/ui/jetpack-compose/modifiers";
 import Qs from "qs";
 // import { v4 as uuidv4 } from "uuid";
 import React, {
@@ -396,7 +396,7 @@ export const GooglePlacesAutocomplete = forwardRef<
               backgroundColor: colors.bg_50,
               alignItems: "center",
               paddingHorizontal: 10,
-              paddingVertical: 6,
+              paddingVertical: 0,
               shadowColor: colors.gray_700,
               shadowOffset: {
                 width: 0,
@@ -418,7 +418,7 @@ export const GooglePlacesAutocomplete = forwardRef<
               value={textState}
               singleLine
               autoFocus={false}
-              modifiers={[fillMaxWidth()]}
+              modifiers={[fillMaxWidth(), height(44)]}
               keyboardOptions={{
                 autoCorrectEnabled: false,
                 capitalization: "none",

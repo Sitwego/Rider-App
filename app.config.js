@@ -20,6 +20,7 @@ const config = {
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#ffffff",
+      usePrecompiledHeaders: true,
     },
     config: {
       googleMaps: {

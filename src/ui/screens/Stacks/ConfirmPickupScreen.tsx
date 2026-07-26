@@ -20,7 +20,7 @@ type Props = NativeStackScreenProps<
 >;
 
 export function ConfirmPickupScreen({ navigation, route }: Props) {
-  const { latitude, longitude, dropOff } = route.params;
+  const { latitude, longitude, dropOff, stop } = route.params;
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { dispatchRideSearchState } = useRideRequsetMoadal();
@@ -39,14 +39,20 @@ export function ConfirmPickupScreen({ navigation, route }: Props) {
       };
       dispatchRideSearchState({
         type: "SET-RIDE-SEARCH-RESULT",
-        payload: { pickup: confirmedPickup, dropOff, findingEstimates: true },
+        payload: {
+          pickup: confirmedPickup,
+          dropOff,
+          stop,
+          findingEstimates: true,
+        },
       });
       navigation.navigate("RideFairEstimateScreen", {
         pickup: confirmedPickup,
         dropOff,
+        stop,
       });
     },
-    [dispatchRideSearchState, dropOff, navigation],
+    [dispatchRideSearchState, dropOff, stop, navigation],
   );
 
   return (

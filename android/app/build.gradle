@@ -91,17 +91,19 @@ def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInRelea
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
+    // NDK is pinned ahead of the version catalog's default (r27) — r29 aligns native
+    // libraries to 16 KB pages, which Google Play requires for apps shipping native code.
     ndkVersion "29.0.14206865"
-    buildToolsVersion "35.0.0"
-    compileSdk 36
-
+    // compileSdk / buildTools / targetSdk all come from android.* in gradle.properties.
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
     namespace 'com.transli.mobilitycustomer'
     defaultConfig {
         applicationId 'com.transli.mobilitycustomer'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 54
-        versionName "0.0.34-beta"
+        versionCode 80
+        versionName "0.0.15"
         manifestPlaceholders = [GOOGLE_MAPS_API_KEY: project.env.get("GOOGLE_MAPS_API_KEY") ?: ""]
     }
     externalNativeBuild {

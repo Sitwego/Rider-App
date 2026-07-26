@@ -39,6 +39,30 @@ export interface SegmentPosition {
 }
 
 /**
+ * True when the input still has at least 2 distinct points after
+ * consecutive-duplicate removal — the minimum prepareRoute() accepts.
+ * Use this to validate untrusted route data (e.g. a server polyline
+ * where the driver already sits on the destination) before building
+ * a tracker.
+ */
+export function hasMinimumDistinctPoints(input: RouteInput): boolean {
+  const raw = typeof input === "string" ? decodePolyline(input) : input;
+  let prev: LatLng | undefined;
+  let distinct = 0;
+  for (const p of raw) {
+    if (
+      !prev ||
+      prev.latitude !== p.latitude ||
+      prev.longitude !== p.longitude
+    ) {
+      if (++distinct >= 2) return true;
+      prev = p;
+    }
+  }
+  return false;
+}
+
+/**
  * Builds the immutable progress model for a route.
  * Accepts decoded coordinates or a Google encoded polyline string.
  *

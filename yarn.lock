@@ -3513,10 +3513,10 @@
   dependencies:
     "@sinonjs/commons" "^3.0.0"
 
-"@swmansion/react-native-bottom-sheet@^0.15.3":
-  version "0.15.3"
-  resolved "https://registry.yarnpkg.com/@swmansion/react-native-bottom-sheet/-/react-native-bottom-sheet-0.15.3.tgz#373ec971a11ff902cfef1d44cd98a7cafe0c5909"
-  integrity sha512-j1ReC3fntMJsy5UCpDMpMAGw7JsDU6SYy0tHl3fmGjw/BayjditqtuOZQ6UYq1isNHwaoBJwO8QBxY6u7qYdvA==
+"@swmansion/react-native-bottom-sheet@^0.16.1":
+  version "0.16.1"
+  resolved "https://registry.yarnpkg.com/@swmansion/react-native-bottom-sheet/-/react-native-bottom-sheet-0.16.1.tgz#bed511d5191d257ea3db779e07e9f326f4928ff0"
+  integrity sha512-ZLi6PtKSOEOXQyafAV+fN8sueUr5hCBcjbOGPuryAIuvXI3s9V8btV1CuTUuJOs6X71tfoyTV23jXS5nCdaMkQ==
 
 "@tanstack/query-async-storage-persister@^5.81.2":
   version "5.81.2"
