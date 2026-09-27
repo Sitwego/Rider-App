@@ -1,131 +1,99 @@
 # 02 — Transition Spike (Android only)
 
-**Step:** Prompt 2 · **Spike branch:** `spike/active-ride-transition` (worktree at `../mobility-customer-spike`, **not for merge**) · **Scope:** Android only; no iOS in this phase.
+**Step:** Prompt 2 · **Spike branch:** `spike/active-ride-transition` (worktree at `../mobility-customer-spike`, **not for merge**) · **Scope:** Android only.
 
-## Status
+## Decision: **Path A (in-place morph)**. Path B is rejected.
 
-| | Path A: in-place morph | Path B: screen-choreography |
-|---|---|---|
-| Implemented | ✅ | ✅ |
-| Type-checks and lints clean | ✅ | ✅ |
-| Android `devDebug` build (`assembleDevDebug`) | ✅ 22 min cold; choreography and teleport native modules compile against RN 0.85.3 | ✅ same APK |
-| Release JS bundle (`expo export:embed --dev false`) | ✅ | ✅ (package `exports` resolve under Metro) |
-| **On-device measurements** | ⏳ **pending**: needs a physical low-end Android | ⏳ **pending** |
+Both paths were measured on a real low-end phone in a release build. On Android, **Path B re-creates the native Google map every time it re-parents it**:
+- `onMapReady` fired about 4 times and tiles reloaded about 3 times per expand/collapse cycle.
+- After the first transition, **the route polyline and driver marker vanished for good** (screenshots below).
+- The camera fit stopped applying.
+- Every tap waited 250–385 ms before any motion.
+- Hardware back stalled for 533 ms.
 
-The recommendation at the end is **provisional**. It rests on the code-level findings below. The device runs decide it: fill in the results table, then confirm or flip it.
-
----
-
-## What was built
-
-Both paths share one map module, `src/spike/activeRideTransition/SpikeMap.tsx`:
-
-- **Production map stack:** `RnMapView` (Google provider, custom style), `MapPolyline` and `SmoothDriverMarker`. The existing `GpsSimulator` feeds `mockRoute` every 2 s, and a toggle drops that to 250 ms for stress tests. This is the same tracking path as production, not a second one.
-- **Fixed-size native map.** In both paths the MapView is always rendered at the *expanded* size (full width × expanded height). The compact state only **clips** it in a centred `overflow: hidden` wrapper, so Google Maps never resizes its surface mid-animation (decision #4 in the prompt flow).
-- **Compact camera.** A `mapPadding` equal to the crop insets keeps the camera, fit-to-bounds and the Google logo inside the visible crop. After a transition settles, the padding switches, followed by exactly one `fitToCoordinates`.
-- **Instrumentation.** An on-screen HUD shows:
-  - **Map lifecycle counters:** `mounts` (React mount), `ready` (`onMapReady`) and `loaded` (`onMapLoaded`, which fires on tile loads). A native re-creation or a tile reload shows up as `ready`/`loaded` going above 1.
-  - **Frame meter:** a Reanimated `useFrameCallback` on the UI thread. It reports frames, fps, p95 and max frame time, and dropped frames. The vsync interval is estimated from the 10th-percentile frame time, so 90/120 Hz panels are handled.
-  - **Path B only:** preparation latency (tap → first animated frame).
-  - **Camera drift:** available when "Fit after settle" is off.
-
-**Entry point:** Profile tab → **Spike: Path A** / **Spike: Path B**. `SPIKE_ROUTES_ENABLED` keeps these reachable in release builds.
-
-### Path A: `PathAScreen.tsx`
-- One screen, no navigation, and **zero new dependencies**.
-- An `Animated.ScrollView` contains the carousel, the map card with an empty measured *slot*, the driver card and the secondary cards. The map lives in an absolute clip container at screen level.
-- `progress` (a shared value from 0 to 1) is the single source of truth. The container's frame is interpolated from the slot rect, adjusted live for `scrollY` on the UI thread, to the expanded rect. `borderRadius` goes from 16 to 0.
-- The content translates so the driver card lands under the expanded map. The carousel and the card text fade out, and an accent header slides in.
-- `withSpring` uses damping 20, stiffness 180 and overshoot clamping. It's interruptible: calling `collapse()` mid-expand springs from the current value.
-- A downward pan on the header drives `progress` from 1 toward 0, then settles with velocity handoff.
-- Android hardware back collapses when expanded; when compact it falls through to navigation.
-- Map gestures are enabled only in the settled `expanded` state.
-- HUD actions: Expand/Collapse, **Interrupt** (expand, then collapse after 180 ms), **20 cycles** (records worst p95, total dropped frames and the remount counters), **Fit after settle** toggle and **GPS 250ms**.
-
-### Path B: `PathBScreens.tsx`
-- Adds `react-native-screen-choreography@0.6.4` and `react-native-teleport@1.2.2`, both **pinned exactly**.
-- `ChoreographyProvider` wraps `NavigationContainer` (`src/navigation.tsx`).
-- **Compact route** `SpikePathB`: wrapped in `ChoreographyScreen`. The map lives inside `<SharedElement id="ride-map" groupId="spike.ride">` in the card slot. A `MapClip` child reads `useSharedElementPresentation().presentationProgress` to morph the corner radius.
-- **Expanded route** `SpikePathBExpanded`: `presentation: 'containedTransparentModal'`, `animation: 'none'`, transparent `contentStyle`, `gestureEnabled: false`. It renders `<SharedElement.Target>` at the expanded size, and the header and cards reveal from the choreography `progress`.
-- **Back:** `useChoreographyNavigation().goBack()`. Hardware back is intercepted by `ChoreographyScreen` (`usePreventRemove`). The header pan uses `useInteractiveTransition` with `useInteractiveGestureLifecycle` (`begin`/`update`/`release`, threshold 0.4).
-- The compact screen owns the map. It watches the session phase (`idle → preparing → active → idle`) to drive the frame meter, the settled mode (map interactivity and padding) and the single post-settle fit.
+That breaks the core requirement: one live map with its camera, tiles and overlays intact. Path A meets every acceptance criterion after three fixes that the spike found and verified (see "Carry into Prompt 7").
 
 ---
 
-## Findings from code (before device runs)
+## Test setup
 
-1. **Path B's API has already drifted from the prompt flow.** `SharedElement.Live` / `SharedElement.LiveTarget` no longer exist in 0.6.x. Plain `SharedElement` now moves the real native subtree, and the destination is `SharedElement.Target`. The README says it outright: *"Pre-1.0: minor versions can introduce breaking changes."* The package had 6 releases in the 0.5–0.6 range and was last published 2026-09-25. **This confirms the stability risk in practice, not just on paper.**
-2. **Path B's peer dependencies are satisfied.** The `expo-router >= 56.1.1` peer is marked optional, and this app uses `@react-navigation` v7 native-stack, which is supported and validated on 7.x. Reanimated 4.3.1, worklets 0.8.3, screens 4.25.2 and RN 0.85.3 with Fabric all meet the lower bounds. No upgrade is needed.
-3. **Path B re-parents a Google MapView at the native level.** On Android, the map draws into its own SurfaceView/TextureView, and detaching and re-attaching that view can recreate the GL surface. The possible results are a black or grey flash, a tile reload, or a lost camera. The `ready` and `loaded` counters exist specifically to catch this. **This is the single biggest unknown, and only a device can answer it.**
-4. **Path B changes app-wide structure.**
-   - The provider has to sit above the whole `NavigationContainer`.
-   - The expanded state has to be a separate route in the same native-stack as the ride screen. In production that's the Home tab's stack.
-   - The floating tab bar stays visible over a `containedTransparentModal`.
-   - The map owner (the compact screen) must stay mounted.
-   - Native swipe-back isn't wired automatically. That doesn't matter on Android, where hardware or predictive back goes through `usePreventRemove`.
-5. **Path B makes the post-settle fit more complicated.** The map's ref belongs to the compact route while the map is shown in the expanded route, so settle detection has to go through the session phase. Path A settles in the spring callback directly.
-6. **Path A's per-frame cost is one wrapper's layout.** `width`/`height` on the clip wrapper are layout props, so Reanimated commits them to the shadow tree each frame. The map's own size never changes, and `top`/`left` are applied as transforms. That's the main thing to watch in the frame meter. If p95 is over budget, the fallback is transform-only, using the FLIP counter-scale technique. The clip wrapper stays at the expanded size and is animated with `scaleX`/`scaleY`, while the map inside gets the inverse scale so its content isn't distorted. The catch is that the corner radius also scales, so it needs compensating.
-7. **Google ToS.** The Google logo must stay visible. In compact mode the crop would hide it at the map's corner. Setting `mapPadding` to the crop insets moves it into the visible area. Both paths need this.
-8. **`showsPointsOfInterests` is iOS-only** in react-native-maps (note the library's own spelling). On Android, POIs are hidden by the custom map style (`CUSTOMSTYLE`), which production already uses.
+| | |
+|---|---|
+| Device | **Samsung Galaxy A30s (SM-A307FN)**, Exynos 7904, 4 GB RAM, Android 11, **60 Hz**, 720×1560 px (density 320) |
+| Build | `devRelease` (Hermes, minified), installed **side by side** as `com.transli.mobilitycustomer.dev` (the Play Store install was left untouched) |
+| Boot | The spike branch boots straight into a spike menu (`SPIKE_BOOT`), with no login |
+| Driving | adb taps and swipes. The HUD is read from `uiautomator dump`, never during an animation |
+| Map | Production `RnMapView` + `MapPolyline` + `SmoothDriverMarker`, with `GpsSimulator` on `mockRoute` (2 s fixes, or 250 ms in stress runs) |
+| Metrics | **Frames:** UI-thread `useFrameCallback` deltas (vsync estimated from the median delta). **Progress trace:** min/max and the largest single-frame step. **Map lifecycle:** `mounts` (React), `ready` (`onMapReady`), `loaded` (`onMapLoaded`). **Memory:** `dumpsys meminfo` PSS |
 
----
-
-## Device protocol (Android)
-
-**Device:** a physical low-end Android (an emulator isn't acceptable), ideally 2–3 GB of RAM, a Helio G- or Snapdragon 4xx-class chip, and Android 12 or later. Record the model and refresh rate.
-
-1. Build a **release** variant of the dev flavor: `cd ../mobility-customer-spike && npx expo run:android --variant devRelease --device`. Dev builds run JS unoptimised, which skews the timings. The spike routes stay reachable in release. If `devRelease` has no signing config, `productionRelease` (the `yarn android:prod` variant) works too. For a quick functional check first, `yarn android` (`devDebug`) is fine, but don't record timings from it.
-2. Log in, go to Profile → **Spike: Path A**, wait for `loaded ≥ 1`, and do each of the following:
-   - **Expand / Collapse** ×5. Note the p95, max and dropped values from the HUD.
-   - **Interrupt** ×3. It should reverse without a jump.
-   - **GPS 250ms** on, then expand and collapse ×3. Check that the marker keeps moving smoothly through the transition.
-   - **Fit after settle** off, then expand and collapse. The `camera` line should read `unchanged`.
-   - **20 cycles.** Afterwards `mounts` and `ready` must still be 1 and `loaded` shouldn't climb per cycle. Note the worst p95 and total dropped frames.
-   - **Hardware back** while expanded. It should collapse and stay on the screen. Back again should leave the screen.
-   - **Header pan** down, both slow and flicked. Check that it follows the finger and settles in the direction of the velocity.
-3. Repeat step 2 for **Spike: Path B**. It has no Interrupt or 20-cycles buttons, so run those manually by tapping Collapse mid-expand and cycling 20 times. Also note `prep` latency.
-4. Optionally, cross-check with the Perf Monitor overlay or a Flashlight run (`flashlight measure`) during 20 cycles.
-5. Screen-record one expand/collapse per path. Watch frame by frame for a grey or black flash on the map.
+Both paths render the map at a **fixed native size** (the expanded frame) and only clip it, so the Google map surface never resizes mid-animation.
 
 ## Results
 
-| Metric (target) | Path A | Path B |
+| Metric (target) | **Path A**, final config | **Path B**, choreography 0.6.4 |
 |---|---|---|
-| Device / refresh rate | | |
-| Expand p95 frame time (< 18 ms at 60 Hz) | | |
-| Collapse p95 frame time | | |
-| Dropped frames per transition | | |
-| Worst p95 over 20 cycles | | |
-| `mounts` / `ready` after 20 cycles (1 / 1) | | |
-| Map flash or tile reload seen in recording (none) | | |
-| Camera kept with fit off (unchanged) | | |
-| Marker smooth with GPS at 250 ms mid-transition | | |
-| Interrupt reverses without a jump | | |
-| Hardware back collapses when expanded | | |
-| Header pan follows finger and settles with velocity | | |
-| Preparation latency (tap → motion) | n/a | |
+| Expand/collapse p95 frame time (< 18 ms) | ✅ **16.7–16.9 ms** in almost every run | Collapse ✅ 16.8 ms · expand 16.8–33.5 ms |
+| Dropped frames per transition | ✅ 0 in most runs, occasionally 1 | Expand 1–5, collapse 0–1 |
+| 20 cycles: worst p95, total dropped | ✅ 33.3 ms, **23 dropped over about 1,840 frames (1.25%)** | not run (disqualified) |
+| **Map re-inits over 20 cycles** (`ready` stays 1) | ✅ **mounts 1 · ready 1 · loaded 1** | ❌ **`ready` 1 → 28, `loaded` 1 → 22 after 7 cycles**. React `mounts` stays 1: the *native* map is re-created on each re-parent |
+| Route and driver marker kept | ✅ | ❌ **Gone after the first transition, in both compact and expanded** |
+| Camera kept (fit disabled) | ✅ `unchanged (-1.22582,36.67281 z11.62)` across expand and collapse | ❌ Reset by each native re-init |
+| Location updates mid-transition (GPS at 250 ms) | ✅ no extra drops (0–1 per transition) | not reached |
+| Interrupt (collapse 180 ms into expand) | ✅ reverses at p ≈ 0.76–0.80, largest step 0.12–0.27 (same as a normal expand) | not tested (disqualified) |
+| Tap → first motion | ✅ same frame | ❌ **246–385 ms** of preparation |
+| Hardware back while expanded | ✅ collapses (292 ms, 0 dropped); a second back leaves the screen | ⚠️ collapses, but **533 ms max frame, 63 dropped** |
+| Header pan | ✅ a slow short drag springs back, a slow long drag tracks and collapses | not tested |
+| First expand after cold start | ✅ 0 dropped in 3 of 3 cold starts. The first launch after install hitched once (83 ms max), which looks like one-time ART/shader warm-up | 50 ms max, 5 dropped |
+| Memory over 20 cycles (±5%) | ✅ 390.8 → 391.4 MB PSS (**+0.15%**) | n/a |
 
-### Screen recordings
-- **Path A:** _pending. Describe: the card's map grows from the slot to full width while the header slides in and the cards slide up; the marker keeps moving; there's no flash._
-- **Path B:** _pending. Describe the same, plus any overlay hand-off frame at the start or end._
+### What the screenshots show
+- **Path A, compact:** the map crop sits in the card with the green route, the car and the Google logo visible (bottom-left anchor).
+- **Path A, expanded:** the accent header shows "Driver arriving in 5 min", the full-width map is fitted to the whole route with the car on it, and the driver card sits directly below. It's the same map instance.
+- **Path B, expanded:** the map shows a different area with **no route and no car**. It's still like that 8 s later. Back in compact, the thumbnail has no route or car either.
 
 ---
 
-## Recommendation (provisional, pending the device table)
+## Carry into Prompt 7
 
-**Path A.** It meets every requirement with zero new dependencies and keeps the map in one parent for its whole life. So flashes, tile reloads and camera loss can't happen by construction. Interruption, velocity handoff and hardware back are all under our direct control.
+These three are defects the first spike build hit on the device. Each fix was verified on the device.
 
-Path B's real advantages are route semantics (a back-stack entry and deep-linkability) and the library's reveal helpers. For this feature, a param on the ride route and a `BackHandler` cover the first, and the second is a few `interpolate`s.
+1. **Anchor the clipped map bottom-left, and give every fit its own padding. Never switch `mapPadding` right before a fit.**
+   - *What happened:* the first build switched `mapPadding` at settle and called `fitToCoordinates` on the next frame. The expanded camera stayed at the compact zoom.
+   - *Cause:* on Android, react-native-maps' `fitToCoordinates` adds whatever *native* base padding is current when it's called (`MapView.java`, `appendMapPadding`), and the prop update hadn't landed yet.
+   - *Fix:* anchor the fixed-size map to the clip's **bottom-left**, so the Google logo, at bottom-left with zero padding, is always inside the compact crop (Maps ToS). Then pass an explicit `edgePadding` per mode: compact is `top = mapH − slotH + m`, `right = mapW − slotW + m`; expanded is `m` on all sides.
+2. **Don't use `overshootClamping` on a spring that can be reversed.**
+   - *What happened:* with `{damping 20, stiffness 180, overshootClamping: true}`, 2 of 3 interrupts **snapped** `progress` from 0.86 to 0 in one frame.
+   - *Fix:* use near-critical damping instead: `{damping 26, stiffness 180, mass 1}` (ζ ≈ 0.97, no visible overshoot). Interrupts are smooth now.
+   - *Side effect:* the rest callback now fires about 800 ms after start, although the visible motion is done by about 300 ms. In Prompt 7, trigger the post-settle fit and the interactive-map switch at "visually settled" (for example `progress` within 0.01 of the target), not only on the spring's completion.
+3. **Keep the collapse gesture enabled through the collapse it starts.**
+   - *What happened:* gating `Gesture.Pan().enabled(state === 'expanded')` on JS state cancelled slow drags after about 10 px, because `onStart` sets `collapsing` and the re-render disables the gesture.
+   - *Fix:* enable it for `state !== 'compact'`. That also lets a finger catch an in-flight animation.
 
-Against Path B:
-- It's pre-1.0, and its API has already broken relative to the prompt flow.
-- It re-parents an Android `MapView` natively, which is the highest-risk operation in this design.
-- It forces app-wide provider and route-structure changes.
+Other notes for later prompts:
+- **Prompt 6, POIs:** the thumbnail and expanded map show POIs (Shell, schools). `showsPointsOfInterests` is iOS-only, so hiding them on Android needs a POI rule in `CUSTOMSTYLE`, or a compact-only style.
+- **Prompt 6, marker size:** the production car marker is large next to a roughly 160 dp thumbnail and gets clipped at the crop edge. Consider a smaller marker in compact mode, or padding sized to the marker.
+- **Prompt 7, flick gestures:** adb-injected "flicks" end with near-zero release velocity, so the velocity projection needs a human-finger check.
+- **Prompt 11, measurement:** the frame meter in `metrics.ts` and the adb driver script in the scratchpad (`spike.sh`: `tap_text`, `hud`) are reusable for the C7–C11 contract runs.
 
-**Switch to Path B only if** the device runs show Path A missing the frame budget, *and* Path B shows `ready = 1`, no flash, and a better p95.
+## Why not Path B, even with a workaround?
+The failure is in the native layer: re-parenting through `react-native-teleport` detaches the Google `MapView` from its window, which re-initialises the `GoogleMap`. React-side markers aren't re-added, and nothing JS can do repairs the camera or tiles in time. Beyond that:
+- It's pre-1.0, and its API already drifted from the prompt flow (`SharedElement.Live` / `LiveTarget` no longer exist in 0.6.x; plain `SharedElement` now moves the real subtree).
+- It needs app-wide structure changes: a provider above `NavigationContainer`, a transparent-modal route, and a mounted owner screen.
+- Every transition carries 250–385 ms of preparation latency.
 
-**If Path B is chosen:** keep the exact version pins and wrap the library in one adapter module, so a future breaking minor release touches one file. Reanimated is already on 4.x, so no separate upgrade PR is needed.
+Its advantage, route semantics, can be had in Path A with a route param and `BackHandler`.
+
+## What was built (spike branch)
+- `src/spike/activeRideTransition/`:
+  - `SpikeMap.tsx`: the shared fixed-size map, with `fit(mode)`.
+  - `PathAScreen.tsx`: the morph. `progress` is the single source of truth. The clip container follows the scroll-adjusted slot on the UI thread; the spring and header pan use velocity handoff; hardware back and the HUD test actions are wired.
+  - `PathBScreens.tsx`: choreography `SharedElement` / `SharedElement.Target`, a transparent-modal route, and interactive back through `useInteractiveGestureLifecycle`.
+  - `metrics.ts`: the frame meter and progress trace.
+  - `SpikeNavigator.tsx`: the pre-auth spike menu.
+- Pinned versions: `react-native-screen-choreography@0.6.4` and `react-native-teleport@1.2.2`. Both compile and run against RN 0.85.3 with the New Architecture.
+- Dev flavor `applicationIdSuffix ".dev"` (spike only), so it installs side by side. Firebase already has a `.dev` client, and the Maps key accepts it.
 
 ## Cleanup
-- The spike lives only on `spike/active-ride-transition` and in the worktree `../mobility-customer-spike`. Neither is merged or pushed.
-- Remove both when done: `git worktree remove ../mobility-customer-spike && git branch -D spike/active-ride-transition`.
+- On the phone: `adb uninstall com.transli.mobilitycustomer.dev`. That removes only the spike app; the Play Store app is separate.
+- In the repo: `git worktree remove ../mobility-customer-spike && git branch -D spike/active-ride-transition`. Neither has been pushed or merged.
+- Keep the spike until Prompt 7 is done if you want to re-run its measurements against the real implementation.
