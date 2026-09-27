@@ -2,7 +2,7 @@
 
 **Step:** Prompt 1 (read-only) · **Branch:** `feat/active-ride-redesign` · **Base:** `main` @ `2c437f2`
 
-> This describes the **working copy** at the time of the audit. That includes uncommitted changes to `RiderHomeScreen.tsx`, `ActiveRideSheet.tsx`, `RideEstimateSheet.tsx`, `RideBookingModalProvider.tsx`, `RideBookingModal.tsx` and `api.ts`, plus the untracked `src/components/home/` directory.
+> This describes the **working copy** at the time of the audit. That includes uncommitted changes to `RiderHomeScreen.tsx`, `ActiveRideSheet.tsx`, `RideEstimateSheet.tsx`, `RideBookingModalProvider.tsx`, `RideBookingModal.tsx` and `api.ts`, plus the untracked `src/components/home/` directory and an uncommitted TrueSheet bump in `package.json`/`yarn.lock`.
 
 ## TL;DR
 
@@ -25,7 +25,7 @@ These are the installed versions from `node_modules/*/package.json`. The package
 | react | 19.2.3 | **19.2.3** |
 | react-native-reanimated | 4.3.1 | **4.3.1** |
 | react-native-worklets | 0.8.3 | **0.8.3** |
-| @lodev09/react-native-true-sheet | ^3.11.1 | **3.11.1** |
+| @lodev09/react-native-true-sheet | ^3.11.15 | **3.11.15** (bumped from 3.11.1 in uncommitted `package.json`/`yarn.lock` during the audit) |
 | react-native-maps (the only map library) | 1.27.2 | **1.27.2** |
 | react-native-screens | 4.25.2 | **4.25.2** |
 | @react-navigation/native | ^7.1.11 | **7.1.14** |
