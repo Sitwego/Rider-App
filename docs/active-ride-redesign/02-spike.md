@@ -2,16 +2,25 @@
 
 **Step:** Prompt 2 · **Spike branch:** `spike/active-ride-transition` (worktree at `../mobility-customer-spike`, **not for merge**) · **Scope:** Android only.
 
-## Decision: **Path A (in-place morph)**. Path B is rejected.
+## Decision: **Path A (in-place morph)**
 
-Both paths were measured on a real low-end phone in a release build. On Android, **Path B re-creates the native Google map every time it re-parents it**:
-- `onMapReady` fired about 4 times and tiles reloaded about 3 times per expand/collapse cycle.
-- After the first transition, **the route polyline and driver marker vanished for good** (screenshots below).
-- The camera fit stopped applying.
-- Every tap waited 250–385 ms before any motion.
-- Hardware back stalled for 533 ms.
+Both paths were measured on a real low-end phone in a release build, and Path B was tested twice: once as shipped and once with a patch to react-native-maps.
 
-That breaks the core requirement: one live map with its camera, tiles and overlays intact. Path A meets every acceptance criterion after three fixes that the spike found and verified (see "Carry into Prompt 7").
+- **Path B as shipped is broken on Android.** Re-parenting the map makes react-native-maps build a brand-new GoogleMap on every re-attach without destroying the old one. The result:
+  - about 5 native re-inits per cycle;
+  - a **Java heap leak of about 30 MB per cycle, crashing the app with an OutOfMemoryError after about 6 cycles**;
+  - **the route and driver marker disappear for good** after the first transition;
+  - an interrupted transition can strand the user on a blank screen.
+- **The root cause is in react-native-maps, not the choreography library** (see "Root cause" below). A roughly 30-line patch that defers the map's teardown on detach fixes the re-inits, the leak and the lost overlays. With it, Path B is smooth, even slightly smoother than Path A.
+- **Path A is still the choice.** It meets every criterion with zero new dependencies. Patched Path B would still mean:
+  - carrying a hand-written patch to a native library that affects every map in the app;
+  - depending on a pre-1.0 package;
+  - 47–515 ms of latency between tap and motion;
+  - taps ignored mid-transition;
+  - memory growth of +7% over 20 cycles (Path A: +0.15%);
+  - app-wide navigation changes.
+
+Path A needs three fixes, all found and verified on the device (see "Carry into Prompt 7").
 
 ---
 
@@ -23,33 +32,55 @@ That breaks the core requirement: one live map with its camera, tiles and overla
 | Build | `devRelease` (Hermes, minified), installed **side by side** as `com.transli.mobilitycustomer.dev` (the Play Store install was left untouched) |
 | Boot | The spike branch boots straight into a spike menu (`SPIKE_BOOT`), with no login |
 | Driving | adb taps and swipes. The HUD is read from `uiautomator dump`, never during an animation |
-| Map | Production `RnMapView` + `MapPolyline` + `SmoothDriverMarker`, with `GpsSimulator` on `mockRoute` (2 s fixes, or 250 ms in stress runs) |
+| Map | Production `RnMapView` + `MapPolyline` + `SmoothDriverMarker`, with `GpsSimulator` on `mockRoute` (2 s fixes, or 250 ms in stress runs). The initial camera fit runs only on the *first* `onMapReady`, so a native re-init can't hide camera loss |
+| Path B variants | (1) stock react-native-maps 1.27.2; (2) the same build with a deferred-detach patch to its Android `MapView.java` (see "Root cause") |
 | Metrics | **Frames:** UI-thread `useFrameCallback` deltas (vsync estimated from the median delta). **Progress trace:** min/max and the largest single-frame step. **Map lifecycle:** `mounts` (React), `ready` (`onMapReady`), `loaded` (`onMapLoaded`). **Memory:** `dumpsys meminfo` PSS |
 
 Both paths render the map at a **fixed native size** (the expanded frame) and only clip it, so the Google map surface never resizes mid-animation.
 
 ## Results
 
-| Metric (target) | **Path A**, final config | **Path B**, choreography 0.6.4 |
-|---|---|---|
-| Expand/collapse p95 frame time (< 18 ms) | ✅ **16.7–16.9 ms** in almost every run | Collapse ✅ 16.8 ms · expand 16.8–33.5 ms |
-| Dropped frames per transition | ✅ 0 in most runs, occasionally 1 | Expand 1–5, collapse 0–1 |
-| 20 cycles: worst p95, total dropped | ✅ 33.3 ms, **23 dropped over about 1,840 frames (1.25%)** | not run (disqualified) |
-| **Map re-inits over 20 cycles** (`ready` stays 1) | ✅ **mounts 1 · ready 1 · loaded 1** | ❌ **`ready` 1 → 28, `loaded` 1 → 22 after 7 cycles**. React `mounts` stays 1: the *native* map is re-created on each re-parent |
-| Route and driver marker kept | ✅ | ❌ **Gone after the first transition, in both compact and expanded** |
-| Camera kept (fit disabled) | ✅ `unchanged (-1.22582,36.67281 z11.62)` across expand and collapse | ❌ Reset by each native re-init |
-| Location updates mid-transition (GPS at 250 ms) | ✅ no extra drops (0–1 per transition) | not reached |
-| Interrupt (collapse 180 ms into expand) | ✅ reverses at p ≈ 0.76–0.80, largest step 0.12–0.27 (same as a normal expand) | not tested (disqualified) |
-| Tap → first motion | ✅ same frame | ❌ **246–385 ms** of preparation |
-| Hardware back while expanded | ✅ collapses (292 ms, 0 dropped); a second back leaves the screen | ⚠️ collapses, but **533 ms max frame, 63 dropped** |
-| Header pan | ✅ a slow short drag springs back, a slow long drag tracks and collapses | not tested |
-| First expand after cold start | ✅ 0 dropped in 3 of 3 cold starts. The first launch after install hitched once (83 ms max), which looks like one-time ART/shader warm-up | 50 ms max, 5 dropped |
-| Memory over 20 cycles (±5%) | ✅ 390.8 → 391.4 MB PSS (**+0.15%**) | n/a |
+| Metric (target) | **Path A**, final config | **Path B** as shipped (stock react-native-maps 1.27.2) | **Path B + maps patch** |
+|---|---|---|---|
+| Expand/collapse p95 frame time (< 18 ms) | ✅ **16.7–16.9 ms** in almost every run | Collapse 16.8 ms · expand 16.8–33.5 ms | ✅ 16.7–17 ms |
+| 20 cycles: worst frame, total dropped | ✅ 33.3 ms, **23 dropped / 40 transitions** | ❌ **cannot complete: OutOfMemoryError crash at about cycle 6** | ✅ 33.5 ms, **9 dropped / 40 transitions** |
+| **Native map re-inits** (`ready` stays 1) | ✅ ready 1 · loaded 1 | ❌ ready +4–5 and loaded +3 per cycle (React `mounts` stays 1) | ✅ ready 1 · loaded 1 |
+| **Memory** | ✅ 20 cycles: **+0.15%** PSS; Java heap flat (28–48 MB, GC noise) | ❌ **Java heap 37 → 187 MB in 5 cycles** (~30 MB/cycle); PSS +69% | ⚠️ 20 cycles: **+7.3%** PSS (429 → 460 MB); Java heap 37 → 47 MB; about +2 MB native per cycle |
+| Route and driver marker kept | ✅ | ❌ **gone after the first transition**, permanently | ✅ |
+| Camera kept (fit disabled) | ✅ `unchanged` | ✅ `unchanged`: react-native-maps' saved state restores it. *(Corrects an earlier draft: the reset we saw came from our own `onMapReady` handler re-fitting after each native re-init. Production `RideMapView` also calls `setCamera` in `onMapReady`, so it would reset too.)* | ✅ `unchanged` |
+| GPS at 250 ms during a transition | ✅ no extra drops | ❌ first expand: **266 ms max frame, 34 dropped** (markers lost afterwards) | ✅ 0–1 dropped |
+| Tap → first motion | ✅ same frame | ❌ 246–473 ms | ⚠️ **47–515 ms** (median ~90 ms) |
+| Interrupt with a tap mid-expand | ✅ reverses at p ≈ 0.76–0.80, smooth | ❌ tap **ignored** (touches blocked during preparation and transition) | ❌ same |
+| Interrupt with hardware back mid-expand | ✅ (same as a tap) | ❌ once **left a blank screen** (both routes faded out) until another tap | ✅ reverses at p ≈ 0.88–0.93 and ends on compact |
+| Hardware back while expanded | ✅ 0 dropped; a second back leaves the screen | ⚠️ **533 ms max frame, 63 dropped** | ✅ 0 dropped |
+| Header drag | ✅ short springs back, long collapses | ✅ short springs back, long collapses (one 0.70 progress jump) | ✅ short springs back (9 dropped under the finger), long collapses |
+| First expand after cold start | ✅ 0 dropped in 3 of 3 (one 83 ms hitch on the first launch after install) | 50 ms max, 5 dropped | 150 ms max, 13 dropped |
 
 ### What the screenshots show
 - **Path A, compact:** the map crop sits in the card with the green route, the car and the Google logo visible (bottom-left anchor).
 - **Path A, expanded:** the accent header shows "Driver arriving in 5 min", the full-width map is fitted to the whole route with the car on it, and the driver card sits directly below. It's the same map instance.
-- **Path B, expanded:** the map shows a different area with **no route and no car**. It's still like that 8 s later. Back in compact, the thumbnail has no route or car either.
+- **Path B as shipped, expanded:** the map shows a different area with **no route and no car**. It's still like that 8 s later. Back in compact, the thumbnail has no route or car either. After a back-key interrupt, one run showed an empty screen with only the HUD until another tap.
+- **Path B + maps patch:** it looks identical to Path A in both states (route, car and fit intact) through 25+ cycles.
+
+## Root cause of Path B's breakage (react-native-maps, Android)
+
+The problem is in `node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java` (1.27.2):
+
+1. **`onDetachedFromWindow`** saves the map state, then runs `onPause()` and `onStop()`, moves `features` into `savedFeatures`, and clears them.
+2. **`onAttachedToWindow`**, when a saved state exists, calls `super.onCreate(savedMapState)`, then `onStart()` and `onResume()`, then `getMapAsync(...)` to re-add `savedFeatures`.
+   - `onCreate` builds a **new GoogleMap, but the old one is never `onDestroy`'d**. That's the ~30 MB-per-cycle Java-heap leak and the OutOfMemoryError.
+3. **`react-native-teleport` detaches and re-attaches the view several times per transition** (host → overlay → host). A second detach that lands before the async `getMapAsync` restore runs `savedFeatures = new ArrayList<>(features)` on the *already-cleared* list. **The markers and polylines are then gone for good.**
+
+**The patch.** A spike-quality patch, kept at `src/spike/activeRideTransition/react-native-maps-deferred-detach.diff` on the spike branch:
+- `onDetachedFromWindow` now only schedules the teardown 500 ms later.
+- `onAttachedToWindow` cancels a pending teardown and keeps the live GoogleMap.
+- `doDestroy` cancels it too.
+
+A real unmount still tears down, just 500 ms later.
+
+**It was tested only in this spike.** Since it changes every `MapView` in the app, before any real use it would need testing across tab switches, app background and foreground, screen unmounts, and the pre-booking map in `RidesFairEstimates`.
+
+**This is also a candidate upstream issue for react-native-maps.** Any re-parenting of a map view (portals, teleport, some list recyclers) would trigger it.
 
 ---
 
@@ -75,13 +106,15 @@ Other notes for later prompts:
 - **Prompt 7, flick gestures:** adb-injected "flicks" end with near-zero release velocity, so the velocity projection needs a human-finger check.
 - **Prompt 11, measurement:** the frame meter in `metrics.ts` and the adb driver script in the scratchpad (`spike.sh`: `tap_text`, `hud`) are reusable for the C7–C11 contract runs.
 
-## Why not Path B, even with a workaround?
-The failure is in the native layer: re-parenting through `react-native-teleport` detaches the Google `MapView` from its window, which re-initialises the `GoogleMap`. React-side markers aren't re-added, and nothing JS can do repairs the camera or tiles in time. Beyond that:
-- It's pre-1.0, and its API already drifted from the prompt flow (`SharedElement.Live` / `LiveTarget` no longer exist in 0.6.x; plain `SharedElement` now moves the real subtree).
-- It needs app-wide structure changes: a provider above `NavigationContainer`, a transparent-modal route, and a mounted owner screen.
-- Every transition carries 250–385 ms of preparation latency.
+## Why not patched Path B?
+Patched, Path B is viable and has slightly better frame numbers than Path A. It still loses on every other axis:
+- **Maintenance.** We'd carry a hand-written native patch to react-native-maps that changes lifecycle behaviour for every map in the app. Every react-native-maps upgrade would need it re-verified, or dropped if upstream fixes it.
+- **Maturity.** `react-native-screen-choreography` is pre-1.0, and its API has already drifted from the prompt flow (`SharedElement.Live` / `LiveTarget` no longer exist in 0.6.x).
+- **Responsiveness.** There's 47–515 ms of preparation between tap and motion, and taps are ignored during the transition (only the back key can reverse it). Path A responds in the same frame and can be interrupted by any input.
+- **Memory.** +7.3% over 20 cycles, against Path A's +0.15%. This was not investigated further.
+- **Structure.** It needs a provider above `NavigationContainer`, a transparent-modal route, an owner screen that stays mounted, and settle detection from the session phase or `onTransitionEnd`. A cancelled session's brief `cancelling` phase is easy to miss, as the spike harness did.
 
-Its advantage, route semantics, can be had in Path A with a route param and `BackHandler`.
+Its real advantage, route semantics (a back-stack entry and deep links), can be had in Path A with a route param and `BackHandler`.
 
 ## What was built (spike branch)
 - `src/spike/activeRideTransition/`:
@@ -92,6 +125,7 @@ Its advantage, route semantics, can be had in Path A with a route param and `Bac
   - `SpikeNavigator.tsx`: the pre-auth spike menu.
 - Pinned versions: `react-native-screen-choreography@0.6.4` and `react-native-teleport@1.2.2`. Both compile and run against RN 0.85.3 with the New Architecture.
 - Dev flavor `applicationIdSuffix ".dev"` (spike only), so it installs side by side. Firebase already has a `.dev` client, and the Maps key accepts it.
+- The spike worktree's `node_modules/react-native-maps` currently holds the **patched** `MapView.java`. It's applied by hand, not through patch-package, so any `yarn install` in the worktree reverts it. The APK built from stock react-native-maps is saved in the session scratchpad.
 
 ## Cleanup
 - On the phone: `adb uninstall com.transli.mobilitycustomer.dev`. That removes only the spike app; the Play Store app is separate.
