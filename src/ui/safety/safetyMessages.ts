@@ -43,3 +43,39 @@ export function buildTripShareMessage(
     .filter((line): line is string => line !== null)
     .join("\n");
 }
+
+export type GeocodedParts = {
+  name?: string | null;
+  street?: string | null;
+  streetNumber?: string | null;
+  district?: string | null;
+  subregion?: string | null;
+  city?: string | null;
+};
+
+// Open Location Code ("PMJH+4GM"): what Android's geocoder returns as the
+// place name where there is no street. Meaningless to a dispatcher.
+const PLUS_CODE = /^[23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{0,3}$/i;
+
+/**
+ * A spoken-friendly address for a dispatcher: street (or a named place),
+ * then the area. Without a street it becomes "Near <area>"; Plus Codes are
+ * dropped.
+ */
+export function formatGeocodedAddress(parts: GeocodedParts): string | null {
+  const clean = (v: string | null | undefined) => {
+    const t = v?.trim();
+    return t && !PLUS_CODE.test(t) ? t : null;
+  };
+  const street = clean(parts.street);
+  const primary = street
+    ? [clean(parts.streetNumber), street].filter(Boolean).join(" ")
+    : clean(parts.name);
+  const area = clean(parts.district) ?? clean(parts.subregion);
+  const city = clean(parts.city);
+  const tail = [area, city].filter(
+    (v, i, all): v is string => !!v && all.indexOf(v) === i && v !== primary,
+  );
+  if (primary) return [primary, ...tail].join(", ");
+  return tail.length > 0 ? `Near ${tail.join(", ")}` : null;
+}

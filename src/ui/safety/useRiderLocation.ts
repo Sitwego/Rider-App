@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 import { useEffect, useState } from "react";
 
-import type { LatLng } from "./safetyMessages";
+import { formatGeocodedAddress, type LatLng } from "./safetyMessages";
 
 export type RiderLocation = {
   coords: LatLng | null;
@@ -11,12 +11,6 @@ export type RiderLocation = {
   fresh: boolean;
   permissionDenied: boolean;
 };
-
-const formatAddress = (a: Location.LocationGeocodedAddress): string | null =>
-  [a.name ?? a.street, a.district ?? a.subregion, a.city]
-    .filter((part): part is string => !!part)
-    .filter((part, i, all) => all.indexOf(part) === i)
-    .join(", ") || null;
 
 /**
  * The rider's own position for the safety sheet: the last known fix
@@ -62,7 +56,7 @@ export function useRiderLocation(): RiderLocation {
         latitude: coords.lat,
         longitude: coords.lng,
       });
-      if (place) update({ address: formatAddress(place) });
+      if (place) update({ address: formatGeocodedAddress(place) });
     })().catch((err) => console.warn("[safety] location lookup failed", err));
 
     return () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   buildTripShareMessage,
   formatCoordinates,
+  formatGeocodedAddress,
   mapsLink,
   type RideSnapshot,
 } from "../safetyMessages";
@@ -56,5 +57,43 @@ describe("safety messages", () => {
     );
     expect(message).not.toContain("Current location");
     expect(message).not.toContain("Trip:");
+  });
+});
+
+describe("formatGeocodedAddress", () => {
+  it("drops a Plus Code name and says Near <area>", () => {
+    expect(
+      formatGeocodedAddress({ name: "PMJH+4GM", district: "Rungiri" }),
+    ).toBe("Near Rungiri");
+  });
+
+  it("prefers the street, with number, then area and city", () => {
+    expect(
+      formatGeocodedAddress({
+        name: "12 Ngong Rd",
+        street: "Ngong Rd",
+        streetNumber: "12",
+        district: "Kilimani",
+        city: "Nairobi",
+      }),
+    ).toBe("12 Ngong Rd, Kilimani, Nairobi");
+  });
+
+  it("uses a named place when there is no street", () => {
+    expect(
+      formatGeocodedAddress({ name: "Junction Mall", subregion: "Dagoretti" }),
+    ).toBe("Junction Mall, Dagoretti");
+  });
+
+  it("dedupes repeated parts and handles nothing useful", () => {
+    expect(
+      formatGeocodedAddress({
+        name: "Kikuyu",
+        district: "Kikuyu",
+        city: "Kikuyu",
+      }),
+    ).toBe("Kikuyu");
+    expect(formatGeocodedAddress({ name: "PMJH+4GM" })).toBeNull();
+    expect(formatGeocodedAddress({})).toBeNull();
   });
 });
