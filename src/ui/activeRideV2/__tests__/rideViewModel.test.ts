@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 
 import {
   decodeLineStr,
+  deriveFare,
   deriveRideDetails,
   formatRideHeadline,
   formatStatusMessage,
@@ -171,5 +172,62 @@ describe("headlineEtaSeconds", () => {
     expect(headlineEtaSeconds("arriving", ride)).toBe(180);
     expect(headlineEtaSeconds("on_trip", ride)).toBe(900);
     expect(headlineEtaSeconds("arrived", ride)).toBeNull();
+  });
+});
+
+describe("deriveFare", () => {
+  it("shows the full fare, rounded like before, without a promotion", () => {
+    expect(deriveFare({ fare: 344 })).toEqual({
+      fare: "340",
+      fullFare: null,
+      discount: null,
+    });
+  });
+
+  it("shows what the rider pays and exact lines that add up", () => {
+    expect(
+      deriveFare({
+        fare: 400,
+        promotion: {
+          promotion_id: "p",
+          discount_amount: 45,
+          discounted_fare: 355,
+        },
+      }),
+    ).toEqual({ fare: "355", fullFare: "400", discount: "45" });
+    expect(
+      deriveFare({
+        fare: 12500,
+        promotion: { discount_amount: 2500, discounted_fare: 10000 },
+      }),
+    ).toEqual({ fare: "10,000", fullFare: "12,500", discount: "2,500" });
+  });
+
+  it("tolerates fractional shillings that reconcile", () => {
+    expect(
+      deriveFare({
+        fare: 344.5,
+        promotion: { discount_amount: 44.5, discounted_fare: 300 },
+      }).discount,
+    ).not.toBeNull();
+  });
+
+  it("falls back to the full fare when the promotion doesn't add up", () => {
+    const fallback = { fare: "400", fullFare: null, discount: null };
+    const promo = (p: object) => deriveFare({ fare: 400, promotion: p });
+    expect(promo({ discount_amount: 45, discounted_fare: 360 })).toEqual(
+      fallback,
+    );
+    expect(promo({ discount_amount: 0, discounted_fare: 400 })).toEqual(
+      fallback,
+    );
+    expect(promo({ discount_amount: -5, discounted_fare: 405 })).toEqual(
+      fallback,
+    );
+    expect(promo({ discount_amount: "45", discounted_fare: 355 })).toEqual(
+      fallback,
+    );
+    expect(promo({ discounted_fare: 355 })).toEqual(fallback);
+    expect(deriveFare({ fare: 400, promotion: null })).toEqual(fallback);
   });
 });

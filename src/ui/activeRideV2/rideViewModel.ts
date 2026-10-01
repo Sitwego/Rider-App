@@ -128,7 +128,12 @@ export type RideDetails = {
   plate: string;
   vehicleType: string | null;
   vehicleColor: string | null;
+  /** What the rider pays — net of any promotion. */
   fare: string;
+  /** Undiscounted fare; set only when a promotion applies. */
+  fullFare: string | null;
+  /** Amount the promotion takes off; set only when a promotion applies. */
+  discount: string | null;
   tripDuration: string;
   pickupEta: string;
   distanceLabel: string;
@@ -166,7 +171,7 @@ export function deriveRideDetails(rideData: RideRequestData): RideDetails {
     plate: rideData.plate_number || "N/A",
     vehicleType: rideData.vehicle_type ?? null,
     vehicleColor: rideData.color ?? null,
-    fare: formatPrice(finiteOr(rideData.fare, 0)),
+    ...deriveFare(rideData),
     tripDuration: autoFormatDuration(finiteOr(rideData.estimated_duration, 0)),
     pickupEta: autoFormatDuration(
       finiteOr(rideData.estimated_duration_to_pickup, 0),
@@ -188,6 +193,48 @@ export function deriveRideDetails(rideData: RideRequestData): RideDetails {
         ? rideData.frozen_wait_elapsed
         : undefined,
   };
+}
+
+// TODO: use formatWholeKes from utils/math/numbers once the promo work lands.
+const wholeKes = (value: number): string =>
+  Math.round(value).toLocaleString("en-KE");
+
+const nonNegative = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0;
+
+/**
+ * The fare as the rider sees it. `rideData.fare` stays the FULL fare — the
+ * driver app reads the same field and a promotion must never reduce what the
+ * driver earns; when a discount was reserved the backend adds `promotion`
+ * (AppliedPromotion), and its `discounted_fare` is what the rider pays.
+ *
+ * Same rule as normalizeRiderFareBreakdown: a discount is shown only when the
+ * figures are valid and reconcile (discounted + discount = fare); otherwise
+ * the full fare is shown as the app always has. Discounted figures are exact
+ * shillings so the lines add up on screen — formatPrice rounds to tens.
+ */
+export function deriveFare(
+  rideData: RideRequestData,
+): Pick<RideDetails, "fare" | "fullFare" | "discount"> {
+  const fare = finiteOr(rideData.fare, 0);
+  const promo: unknown = rideData.promotion;
+  if (promo && typeof promo === "object") {
+    const { discount_amount: discount, discounted_fare: youPay } =
+      promo as Record<string, unknown>;
+    if (
+      nonNegative(discount) &&
+      nonNegative(youPay) &&
+      discount > 0 &&
+      Math.abs(youPay + discount - fare) < 0.005
+    ) {
+      return {
+        fare: wholeKes(youPay),
+        fullFare: wholeKes(fare),
+        discount: wholeKes(discount),
+      };
+    }
+  }
+  return { fare: formatPrice(fare), fullFare: null, discount: null };
 }
 
 /** ETA the headline counts down to: pickup before the trip, dropoff during it. */

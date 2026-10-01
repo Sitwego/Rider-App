@@ -14,28 +14,44 @@ const CURRENCY = "KES";
 const PAYMENT_METHOD = "Cash";
 
 type FareDetails = {
+  /** What the rider pays — net of any promotion. */
   fare: string;
+  /** Set only when a promotion applies (with `discount`). */
+  fullFare: string | null;
+  discount: string | null;
   distanceLabel: string;
   tripDuration: string;
   vehicleType: string | null;
 };
 
-const FareRow = ({ label, value }: { label: string; value: string }) => {
+const FareRow = ({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+}) => {
   const { colors } = useAppTheme();
   return (
     <RnView style={styles.fareRow}>
       <RnText style={[atoms.text_sm, { color: colors.gray_300 }]}>
         {label}
       </RnText>
-      <RnText style={[atoms.text_sm, { color: colors.text }]}>{value}</RnText>
+      <RnText style={[atoms.text_sm, { color: valueColor ?? colors.text }]}>
+        {value}
+      </RnText>
     </RnView>
   );
 };
 
-// TODO: share with ActiveRideSheet's FareDetailsContent (and add the promo
-// lines) once that file's WIP lands.
+// TODO: share with ActiveRideSheet's FareDetailsContent once that file's
+// promo WIP lands.
 export function FareDetailsContent({
   fare,
+  fullFare,
+  discount,
   distanceLabel,
   tripDuration,
   vehicleType,
@@ -59,6 +75,19 @@ export function FareDetailsContent({
         </RnText>
       </RnView>
       <RnView style={atoms.gap_sm}>
+        {/* Only on a discounted ride: the original fare and what came off
+            it, so the amount above is explained rather than just lower than
+            the quote. */}
+        {fullFare && discount ? (
+          <>
+            <FareRow label="Fare" value={`${CURRENCY} ${fullFare}`} />
+            <FareRow
+              label="Promo discount"
+              value={`−${CURRENCY} ${discount}`}
+              valueColor={colors.green_500}
+            />
+          </>
+        ) : null}
         <FareRow label="Trip distance" value={distanceLabel} />
         <FareRow label="Estimated duration" value={tripDuration} />
         <FareRow label="Vehicle type" value={vehicleType ?? "—"} />
@@ -82,13 +111,16 @@ export function FareDetailsContent({
 function FareCardBase(props: FareDetails) {
   const { colors, fonts } = useAppTheme();
   const sheet = useBottomSheet();
-  const { fare, distanceLabel, tripDuration, vehicleType } = props;
+  const { fare, fullFare, discount, distanceLabel, tripDuration, vehicleType } =
+    props;
 
   const onPress = useCallback(() => {
     sheet.present(
       ({ dismiss }) => (
         <FareDetailsContent
           fare={fare}
+          fullFare={fullFare}
+          discount={discount}
           distanceLabel={distanceLabel}
           tripDuration={tripDuration}
           vehicleType={vehicleType}
@@ -102,13 +134,26 @@ function FareCardBase(props: FareDetails) {
         testID: "fare-details-sheet",
       },
     );
-  }, [sheet, fare, distanceLabel, tripDuration, vehicleType, colors]);
+  }, [
+    sheet,
+    fare,
+    fullFare,
+    discount,
+    distanceLabel,
+    tripDuration,
+    vehicleType,
+    colors,
+  ]);
 
   return (
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="View fare details"
+      accessibilityLabel={
+        discount
+          ? `Fare ${CURRENCY} ${fare}, promo saves ${CURRENCY} ${discount}. View fare details`
+          : "View fare details"
+      }
       style={[styles.card, { backgroundColor: colors.bg_50 }]}
     >
       <RnView style={atoms.gap_xs}>
@@ -118,14 +163,31 @@ function FareCardBase(props: FareDetails) {
           </RnText>
           <Icon name="Info" size={14} color={colors.gray_300} />
         </RnView>
-        <RnText
-          style={[
-            atoms.text_lg,
-            { color: colors.text, fontFamily: fonts.heavy.fontFamily },
-          ]}
-        >
-          {CURRENCY} {fare}
-        </RnText>
+        <RnView style={styles.amountRow}>
+          <RnText
+            style={[
+              atoms.text_lg,
+              { color: colors.text, fontFamily: fonts.heavy.fontFamily },
+            ]}
+          >
+            {CURRENCY} {fare}
+          </RnText>
+          {fullFare ? (
+            <RnText
+              style={[atoms.text_sm, styles.struck, { color: colors.gray_300 }]}
+            >
+              {CURRENCY} {fullFare}
+            </RnText>
+          ) : null}
+        </RnView>
+        {discount ? (
+          <RnView style={[styles.promo, { backgroundColor: colors.bg_100 }]}>
+            <Icon name="BadgePercent" size={14} color={colors.green_500} />
+            <RnText style={[atoms.text_xs, { color: colors.green_500 }]}>
+              Promo applied · −{CURRENCY} {discount}
+            </RnText>
+          </RnView>
+        ) : null}
       </RnView>
       <RnView style={styles.titleRow}>
         <Icon name="HandCoins" size={20} color={colors.green_500} />
@@ -148,6 +210,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  amountRow: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
+  struck: { textDecorationLine: "line-through" },
+  promo: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
   fareRow: {
     flexDirection: "row",
     alignItems: "center",

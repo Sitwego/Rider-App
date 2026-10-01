@@ -27,7 +27,10 @@ export function ActiveRideDevTools() {
           { label: mock.nextStep, onPress: mock.advance },
           { label: "End mock ride", onPress: mock.end },
         ]
-      : [{ label: "Start mock ride", onPress: mock.start }]),
+      : [
+          { label: "Start mock ride", onPress: () => mock.start() },
+          { label: "Start mock ride (promo)", onPress: () => mock.start(true) },
+        ]),
   ];
 
   return (

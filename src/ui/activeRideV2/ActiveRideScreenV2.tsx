@@ -198,6 +198,8 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
           </RnView>
           <FareCard
             fare={details.fare}
+            fullFare={details.fullFare}
+            discount={details.discount}
             distanceLabel={details.distanceLabel}
             tripDuration={details.tripDuration}
             vehicleType={details.vehicleType}

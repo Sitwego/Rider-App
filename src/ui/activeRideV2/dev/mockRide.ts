@@ -115,17 +115,30 @@ export function useMockRide() {
     [setActiveRideState],
   );
 
-  const start = useCallback(() => {
-    setActiveRideState({
-      type: "SET-ACTIVE-RIDE",
-      data: {
-        rideData: fixtureRide(),
-        ride_status: "Accepted",
-        should_persist: false,
-      },
-    });
-    drive(PICKUP_LEG, "estimated_duration_to_pickup");
-  }, [drive, setActiveRideState]);
+  /** `withPromo`: KES 100 off the KES 640 fare, as the backend sends it. */
+  const start = useCallback(
+    (withPromo = false) => {
+      setActiveRideState({
+        type: "SET-ACTIVE-RIDE",
+        data: {
+          rideData: withPromo
+            ? {
+                ...fixtureRide(),
+                promotion: {
+                  promotion_id: "mock-promo",
+                  discount_amount: 100,
+                  discounted_fare: 540,
+                },
+              }
+            : fixtureRide(),
+          ride_status: "Accepted",
+          should_persist: false,
+        },
+      });
+      drive(PICKUP_LEG, "estimated_duration_to_pickup");
+    },
+    [drive, setActiveRideState],
+  );
 
   const end = useCallback(() => {
     stopSimulator();
