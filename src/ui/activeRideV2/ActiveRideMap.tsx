@@ -152,7 +152,14 @@ const ActiveRideMapBase = forwardRef<ActiveRideMapHandle, Props>(
       [fitFor, onPanDrag, recenter],
     );
 
-    // Compact thumbnail: keep driver + next target framed, throttled.
+    // Compact thumbnail: frame a new route right away (it may arrive after
+    // the map is ready)…
+    useEffect(() => {
+      if (latest.current.mode !== "compact" || !initialFitDone.current) return;
+      fitFor("compact", true);
+    }, [route, fitFor]);
+
+    // …and keep driver + next target framed as the driver moves, throttled.
     useEffect(() => {
       if (mode !== "compact" || !driverPoint || !initialFitDone.current) {
         return;

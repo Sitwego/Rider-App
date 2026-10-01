@@ -133,12 +133,19 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         scrollEnabled={state === "compact" || expanded}
-        contentContainerStyle={{
-          paddingTop: insets.top + space.md,
-          paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
-        }}
       >
-        <Animated.View style={[styles.content, contentStyle]}>
+        {/* Padding lives on this view, not the scroll container: card and
+            slot positions are measured inside it and drive the map overlay. */}
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              paddingTop: insets.top + space.md,
+              paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
+            },
+            contentStyle,
+          ]}
+        >
           <RideStatusCard
             label={view.label}
             headline={view.headline}
