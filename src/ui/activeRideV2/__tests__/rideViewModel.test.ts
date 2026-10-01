@@ -41,7 +41,10 @@ describe("formatRideHeadline", () => {
       "Driver arriving in 1 min",
     );
     expect(formatRideHeadline("assigned", 151, null)).toBe(
-      "Driver arriving in 3 min",
+      "Driver arriving in 2 min",
+    );
+    expect(formatRideHeadline("arriving", 299, null)).toBe(
+      "Driver arriving in 4 min",
     );
   });
 

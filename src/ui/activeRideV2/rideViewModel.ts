@@ -44,7 +44,8 @@ export function formatRideHeadline(
         return "Your driver is on the way";
       }
       if (etaSeconds < ARRIVING_NOW_SECONDS) return "Driver arriving now";
-      const minutes = Math.max(1, Math.round(etaSeconds / 60));
+      // Floor, like autoFormatDuration, so it agrees with the status line.
+      const minutes = Math.max(1, Math.floor(etaSeconds / 60));
       return `Driver arriving in ${minutes} min`;
     }
     case "arrived":

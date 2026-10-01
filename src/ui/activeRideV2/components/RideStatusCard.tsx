@@ -82,12 +82,14 @@ function RideStatusCardBase({
     [report],
   );
 
-  const textFade = useAnimatedStyle(() => ({
+  // The whole card fades: it slides up under the expanded map, and its
+  // bottom edge would otherwise show between the map and the driver card.
+  const cardFade = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 0.5], [1, 0], "clamp"),
   }));
 
   return (
-    <RnView onLayout={onCardLayout}>
+    <Animated.View onLayout={onCardLayout} style={cardFade}>
       <PressableScale
         onPress={onExpand}
         accessibilityRole="button"
@@ -95,7 +97,7 @@ function RideStatusCardBase({
         style={[styles.card, { backgroundColor: colors.bg_50 }]}
       >
         <RnView style={styles.row} onLayout={onRowLayout}>
-          <Animated.View style={[styles.text, textFade]}>
+          <RnView style={styles.text}>
             <RnText style={[atoms.text_xs, { color: colors.gray_300 }]}>
               {label}
             </RnText>
@@ -110,7 +112,7 @@ function RideStatusCardBase({
             >
               {headline}
             </Animated.Text>
-          </Animated.View>
+          </RnView>
           <RnView
             onLayout={onSlotLayout}
             style={[
@@ -149,7 +151,7 @@ function RideStatusCardBase({
           />
         ) : null}
       </PressableScale>
-    </RnView>
+    </Animated.View>
   );
 }
 
