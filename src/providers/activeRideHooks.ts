@@ -14,6 +14,8 @@ import {
   strartWatchingLocationChanges as startWatchingLocationChanges,
 } from "~/lib/native";
 import { navigateRef } from "~/navigation";
+import { isMockRideId } from "~/ui/activeRideV2/dev/mockRideId";
+import { usesActiveRideV2 } from "~/ui/activeRideV2/flags";
 import { getCoordinatesFromLineStr } from "~/utils/geo";
 
 import { useLoadingSheet } from "./LoadingSheetProvider";
@@ -24,6 +26,7 @@ import type {
   DriverArrivedPayload,
   RideEvent,
 } from "~/types/rideRequestEvents";
+import type { RideRequestStatus } from "~/types/rideRequestStatus";
 import type {
   ActiveRideState,
   RideRequestData,
@@ -115,7 +118,8 @@ export function useLocationUpdates(
   setActiveRideState: ActionDispatch<[action: Action]>,
 ) {
   useEffect(() => {
-    if (!activeRideId) return;
+    // Dev mock rides feed locations from JS; there is no ride to stream.
+    if (!activeRideId || isMockRideId(activeRideId)) return;
     startWatchingLocationChanges(activeRideId);
     return () => {
       console.log("Stopping location changes for ride:", activeRideId);
@@ -233,9 +237,25 @@ export function useRidePollingEffect(
 export function useRideSheet(
   ref: RefObject<ActionSheetACTRef | null>,
   activeRideId: string | undefined,
+  rideStatus: RideRequestStatus | null,
 ) {
+  // The v2 layout renders the ride details itself, without the sheet.
+  const v2 = usesActiveRideV2(activeRideId, rideStatus);
+  const openedRef = useRef(false);
+
   useEffect(() => {
-    if (!activeRideId) return;
+    if (!activeRideId) {
+      openedRef.current = false;
+      return;
+    }
+    if (v2) {
+      if (openedRef.current) {
+        openedRef.current = false;
+        ref.current?.close().catch(() => {});
+      }
+      return;
+    }
+    openedRef.current = true;
     console.log("Opening Active RideSheet");
     ref.current
       ?.open()
@@ -243,5 +263,5 @@ export function useRideSheet(
       .catch((error) =>
         console.error("Error opening Active RideSheet:", error),
       );
-  }, [activeRideId, ref]);
+  }, [activeRideId, ref, v2]);
 }

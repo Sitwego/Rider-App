@@ -73,7 +73,7 @@ const ActiveRideSheetProvider = ({ children }: { children: ReactNode }) => {
     activeRideState.ride_status_update_keys,
     setActiveRideState,
   );
-  useRideSheet(ref, activeRideState.rideData?.id);
+  useRideSheet(ref, activeRideState.rideData?.id, activeRideState.ride_status);
 
   const getContext = useMemo(
     () => ({

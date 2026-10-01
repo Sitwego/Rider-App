@@ -2,7 +2,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAppTheme } from "~/ui/theme";
 import { sharedStackScreens } from "./sharedStacks";
 import { RiderHistoryScreen } from "~/ui/screens/RiderHistoryScreen";
-import { RiderHomeScreen } from "~/ui/screens/RiderHomeScreen";
+import { ActiveRideGate } from "~/ui/activeRideV2/ActiveRideGate";
 import { HelpScreen } from "~/ui/screens/HelpScreen";
 import { RiderProfileScreen } from "~/ui/screens/RiderProfileScreen";
 import { EditProfileScreen } from "~/ui/screens/EditProfileScreen";
@@ -30,7 +30,7 @@ export function RiderHomeScreenTab() {
     >
       <RiderHomeScreenStack.Screen
         name="RiderHomeScreen"
-        component={RiderHomeScreen}
+        component={ActiveRideGate}
         options={{ headerShown: false }}
       />
       {sharedStackScreens(RiderHomeScreenStack)}
