@@ -22,6 +22,8 @@ import { RideStatusHeader } from "./components/RideStatusHeader";
 import { TripActionsCard } from "./components/TripActionsCard";
 import { TripRouteCard } from "./components/TripRouteCard";
 import { ACCENT, CONTENT_GUTTER, useActiveRideGeometry } from "./geometry";
+import { RidePromoCarousel } from "./promo/RidePromoCarousel";
+import { usePromoSlides } from "./promo/usePromoSlides";
 import { useActiveRideLayout, type SettledMode } from "./useActiveRideLayout";
 import { type ActiveRideView, useActiveRideView } from "./useActiveRideView";
 
@@ -124,6 +126,12 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
     ],
   }));
 
+  const promoFade = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.4], [1, 0], "clamp"),
+  }));
+
+  const slides = usePromoSlides();
+  const hasPromo = slides.length > 0;
   const { details, phase } = view;
   const expanded = state === "expanded";
 
@@ -140,12 +148,22 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
           style={[
             styles.content,
             {
-              paddingTop: insets.top + space.md,
+              // The promo banner is full-bleed under the status bar.
+              paddingTop: hasPromo ? 0 : insets.top + space.md,
               paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
             },
             contentStyle,
           ]}
         >
+          {hasPromo ? (
+            <Animated.View style={[styles.bleed, promoFade]}>
+              <RidePromoCarousel
+                slides={slides}
+                rideId={view.rideId}
+                active={state === "compact"}
+              />
+            </Animated.View>
+          ) : null}
           <RideStatusCard
             label={view.label}
             headline={view.headline}
@@ -239,6 +257,8 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: CONTENT_GUTTER, gap: space.md },
+  // Cancels the content gutter so the banner spans the full width.
+  bleed: { marginHorizontal: -CONTENT_GUTTER },
   // The fixed-size map is anchored bottom-left so the Google logo stays
   // inside the compact crop.
   mapContainer: {
