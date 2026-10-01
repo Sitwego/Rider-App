@@ -90,7 +90,7 @@ export function SafetySheetContent({
         accessibilityLabel={`Call emergency services, ${EMERGENCY_NUMBER}`}
         style={[styles.callButton, { backgroundColor: colors.red_500 }]}
       >
-        <Icon name="Phone" size={24} color="white" strokeWidth={2.5} />
+        <Icon name="Siren" size={24} color="white" strokeWidth={2.5} />
         <RnText style={[atoms.text_xl, heavy, styles.white]}>
           Call {EMERGENCY_NUMBER}
         </RnText>
@@ -161,7 +161,7 @@ export function SafetySheetContent({
           accessibilityRole="button"
           style={[styles.secondary, { borderColor: colors.red_500 }]}
         >
-          <Icon name="Siren" size={20} color={colors.red_500} />
+          <Icon name="ShieldAlert" size={20} color={colors.red_500} />
           <RnText style={[atoms.text_md, heavy, { color: colors.red_500 }]}>
             {alertState === "sent"
               ? "Safety team alerted — we'll call you"
