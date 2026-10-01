@@ -1,25 +1,16 @@
-import { useIsFocused } from "@react-navigation/native";
 import { Image } from "expo-image";
 import { PressableScale } from "pressto";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import {
-  AccessibilityInfo,
-  AppState,
-  Linking,
-  StyleSheet,
-  useWindowDimensions,
-} from "react-native";
-import { useReducedMotion, useSharedValue } from "react-native-reanimated";
+import { Linking, StyleSheet, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Carousel, useOptionalIsFocused } from "~/components/carousel";
 import RnText from "~/ui/RnText";
 import { RnView } from "~/ui/RnView";
 import { useAppTheme } from "~/ui/theme";
 import { atoms } from "~/ui/theme/atoms";
 import { space } from "~/ui/theme/tokens";
 
-import { PromoDots } from "./PromoDots";
-import { PromoPager, type PromoPagerHandle } from "./PromoPager";
 import { LOCAL_PROMO_IMAGES } from "./usePromoSlides";
 
 import type { PromoSlide } from "./promoSlides";
@@ -35,30 +26,6 @@ function trackPromoEvent(event: PromoEvent, slideId: string, rideId: string) {
   if (__DEV__) console.log(`[analytics] ${event}`, { slideId, rideId });
 }
 
-function useScreenReaderEnabled(): boolean {
-  const [enabled, setEnabled] = useState(false);
-  useEffect(() => {
-    void AccessibilityInfo.isScreenReaderEnabled().then(setEnabled);
-    const sub = AccessibilityInfo.addEventListener(
-      "screenReaderChanged",
-      setEnabled,
-    );
-    return () => sub.remove();
-  }, []);
-  return enabled;
-}
-
-function useAppActive(): boolean {
-  const [active, setActive] = useState(AppState.currentState === "active");
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (s) =>
-      setActive(s === "active"),
-    );
-    return () => sub.remove();
-  }, []);
-  return active;
-}
-
 type Props = {
   slides: PromoSlide[];
   rideId: string;
@@ -67,41 +34,15 @@ type Props = {
 };
 
 /**
- * Full-bleed promo banner at the top of the active-ride page. Autoplay
- * pauses on touch, in the background, off-focus, while the map is
- * expanded, and for reduce-motion or screen-reader users.
+ * Full-bleed promo banner at the top of the active-ride page: the shared
+ * Carousel plus ad slides, CTA deep links and impression tracking.
  */
 function RidePromoCarouselBase({ slides, rideId, active }: Props) {
-  const { width, height } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bannerH = Math.round(height * BANNER_FRACTION) + insets.top;
-
-  const pagerRef = useRef<PromoPagerHandle>(null);
-  const position = useSharedValue(0);
+  const focused = useOptionalIsFocused();
   const [index, setIndex] = useState(0);
-  const [dragging, setDragging] = useState(false);
-
-  const focused = useIsFocused();
-  const appActive = useAppActive();
-  const reducedMotion = useReducedMotion();
-  const screenReader = useScreenReaderEnabled();
-
-  const autoplay =
-    slides.length > 1 &&
-    active &&
-    focused &&
-    appActive &&
-    !dragging &&
-    !reducedMotion &&
-    !screenReader;
-
-  useEffect(() => {
-    if (!autoplay) return;
-    const id = setTimeout(() => {
-      pagerRef.current?.goTo((index + 1) % slides.length);
-    }, AUTOPLAY_MS);
-    return () => clearTimeout(id);
-  }, [autoplay, index, slides.length]);
 
   // Impression: once per slide per ride, after it has been on screen 1 s.
   const seen = useRef(new Set<string>());
@@ -135,31 +76,24 @@ function RidePromoCarouselBase({ slides, rideId, active }: Props) {
     [rideId],
   );
 
-  if (slides.length === 0) return null;
-
   return (
-    <RnView style={{ height: bannerH }}>
-      <PromoPager
-        ref={pagerRef}
-        width={width}
-        height={bannerH}
-        position={position}
-        onSettledPage={setIndex}
-        onDraggingChange={setDragging}
-      >
-        {slides.map((slide) => (
-          <PromoSlideView
-            key={slide.id}
-            slide={slide}
-            width={width}
-            height={bannerH}
-            topInset={insets.top}
-            onPress={onSlidePress}
-          />
-        ))}
-      </PromoPager>
-      <PromoDots count={slides.length} position={position} />
-    </RnView>
+    <Carousel
+      data={slides}
+      keyExtractor={(slide) => slide.id}
+      height={bannerH}
+      autoplayIntervalMs={AUTOPLAY_MS}
+      paused={!active}
+      onIndexChange={setIndex}
+      renderItem={({ item, width, height: h }) => (
+        <PromoSlideView
+          slide={item}
+          width={width}
+          height={h}
+          topInset={insets.top}
+          onPress={onSlidePress}
+        />
+      )}
+    />
   );
 }
 

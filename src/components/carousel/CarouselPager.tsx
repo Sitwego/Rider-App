@@ -9,10 +9,10 @@ import Animated, {
   useAnimatedScrollHandler,
 } from "react-native-reanimated";
 
-export type PromoPagerHandle = { goTo: (page: number) => void };
+export type CarouselPagerHandle = { goTo: (page: number) => void };
 
-export type PromoPagerProps = {
-  ref?: Ref<PromoPagerHandle>;
+export type CarouselPagerProps = {
+  ref?: Ref<CarouselPagerHandle>;
   width: number;
   height: number;
   /** Written on the UI thread while paging: page index + fraction. */
@@ -25,9 +25,9 @@ export type PromoPagerProps = {
 
 /**
  * Fallback pager (iOS / non-Android) on a paging ScrollView. Android uses
- * the Jetpack Compose HorizontalPager in PromoPager.android.tsx.
+ * the Jetpack Compose HorizontalPager in CarouselPager.android.tsx.
  */
-export function PromoPager({
+export function CarouselPager({
   ref,
   width,
   height,
@@ -35,7 +35,7 @@ export function PromoPager({
   onSettledPage,
   onDraggingChange,
   children,
-}: PromoPagerProps) {
+}: CarouselPagerProps) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
   useImperativeHandle(

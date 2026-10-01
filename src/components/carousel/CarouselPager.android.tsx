@@ -7,16 +7,16 @@ import {
 import { fillMaxSize } from "@expo/ui/jetpack-compose/modifiers";
 import { useImperativeHandle, useRef } from "react";
 
-import type { PromoPagerProps } from "./PromoPager";
+import type { CarouselPagerProps } from "./CarouselPager";
 
-export type { PromoPagerHandle, PromoPagerProps } from "./PromoPager";
+export type { CarouselPagerHandle, CarouselPagerProps } from "./CarouselPager";
 
 /**
  * Android pager: Jetpack Compose HorizontalPager (Expo UI) with each slide
  * hosted as a React Native view. Scroll position is reported by a worklet
  * on the UI thread, so the dots track the finger without JS round-trips.
  */
-export function PromoPager({
+export function CarouselPager({
   ref,
   width,
   height,
@@ -24,7 +24,7 @@ export function PromoPager({
   onSettledPage,
   onDraggingChange,
   children,
-}: PromoPagerProps) {
+}: CarouselPagerProps) {
   const pager = useRef<HorizontalPagerHandle>(null);
 
   useImperativeHandle(
