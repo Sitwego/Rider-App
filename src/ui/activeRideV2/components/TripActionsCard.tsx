@@ -20,6 +20,8 @@ import { googleMapsNavigationLink } from "~/utils/geo";
 
 type Props = {
   destination: { lat: number; lng: number } | null;
+  onSafety: () => void;
+  onShareTrip: () => void;
   /** Cancelling is offered until the trip starts, as in the old sheet. */
   canCancel: boolean;
 };
@@ -68,7 +70,12 @@ function useCancelActiveRide() {
   }, [sheet, colors.background, cancelRide]);
 }
 
-function TripActionsCardBase({ destination, canCancel }: Props) {
+function TripActionsCardBase({
+  destination,
+  canCancel,
+  onSafety,
+  onShareTrip,
+}: Props) {
   const { colors } = useAppTheme();
   const onCancel = useCancelActiveRide();
 
@@ -79,6 +86,28 @@ function TripActionsCardBase({ destination, canCancel }: Props) {
 
   return (
     <RnView style={[styles.card, { backgroundColor: colors.bg_50 }]}>
+      <PressableScale
+        onPress={onSafety}
+        accessibilityRole="button"
+        accessibilityLabel="Sitwego Safety: emergency call and safety options"
+        style={styles.action}
+      >
+        <Icon name="ShieldCheck" size={20} color={colors.green_500} />
+        <RnText style={[atoms.text_sm, { color: colors.text }]}>
+          Sitwego Safety
+        </RnText>
+      </PressableScale>
+      <PressableScale
+        onPress={onShareTrip}
+        accessibilityRole="button"
+        accessibilityLabel="Share trip status"
+        style={styles.action}
+      >
+        <Icon name="Share2" size={20} color={colors.text} />
+        <RnText style={[atoms.text_sm, { color: colors.text }]}>
+          Share trip status
+        </RnText>
+      </PressableScale>
       {destination ? (
         <PressableScale
           onPress={onNavigate}

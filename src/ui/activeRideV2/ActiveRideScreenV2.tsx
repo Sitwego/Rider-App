@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Icon from "~/components/Icons";
 import { RnView } from "~/ui/RnView";
+import { useSafetySheet, useShareTrip } from "~/ui/safety/useSafetySheet";
 import { useAppTheme } from "~/ui/theme";
 import { space } from "~/ui/theme/tokens";
 
@@ -131,6 +132,8 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
   }));
 
   const slides = usePromoSlides();
+  const openSafety = useSafetySheet();
+  const shareTrip = useShareTrip();
   const hasPromo = slides.length > 0;
   const { details, phase } = view;
   const expanded = state === "expanded";
@@ -208,6 +211,8 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
           <TripActionsCard
             destination={details.destination}
             canCancel={phase !== "on_trip"}
+            onSafety={openSafety}
+            onShareTrip={shareTrip}
           />
         </Animated.View>
       </Animated.ScrollView>
@@ -228,7 +233,7 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
           stops={view.stops}
           vehicleType={details.vehicleType ?? undefined}
           markerEta={view.markerEta}
-          showEmergency={phase === "on_trip"}
+          showEmergency
         />
         <Animated.View
           style={[styles.expandBadge, expandBadgeStyle]}

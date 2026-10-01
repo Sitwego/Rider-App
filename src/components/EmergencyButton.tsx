@@ -3,11 +3,13 @@ import { PressableScale as Pressable } from "pressto";
 import Icon from "~/components/Icons";
 import RnText from "~/ui/RnText";
 import { RnView } from "~/ui/RnView";
+import { useSafetySheet } from "~/ui/safety/useSafetySheet";
 import { useAppTheme } from "~/ui/theme";
 import { atoms } from "~/ui/theme/atoms";
 
 export function EmergencyButton() {
   const { colors, fonts } = useAppTheme();
+  const openSafety = useSafetySheet();
 
   return (
     <RnView
@@ -21,9 +23,9 @@ export function EmergencyButton() {
       }}
     >
       <Pressable
-        onPress={() => {
-          // TODO: implement emergency action
-        }}
+        onPress={openSafety}
+        accessibilityRole="button"
+        accessibilityLabel="Emergency. Open safety options"
         style={{
           flexDirection: "row",
           alignItems: "center",
