@@ -143,11 +143,15 @@ export const StopMarker: React.FC<Point & { label?: string }> = (props) => {
   );
 };
 
-export const DestinationMarker: React.FC<Point & { ride_duration: string }> = (
-  props,
-) => {
+export const DestinationMarker: React.FC<
+  Point & {
+    ride_duration: string;
+    /** Smaller chip for map thumbnails. */
+    compact?: boolean;
+  }
+> = (props) => {
   const { fonts, colors } = useAppTheme();
-  const { ride_duration, ...rest } = props;
+  const { ride_duration, compact, ...rest } = props;
   return (
     <Marker flat anchor={{ x: 0.3, y: 0.6 }} coordinate={rest}>
       <RnView
@@ -156,21 +160,21 @@ export const DestinationMarker: React.FC<Point & { ride_duration: string }> = (
           s.gap4,
           s.spaceBetween,
           s.alignCenter,
-          s.px6,
-          s.py5,
+          compact ? { paddingHorizontal: 4, paddingVertical: 2 } : s.px6,
+          compact ? null : s.py5,
           s.borderRadius_full,
           { backgroundColor: colors.bg_100 },
         ]}
       >
         <Icon
           name="CircleStop"
-          size={22}
+          size={compact ? 12 : 22}
           color={colors.green_400}
           strokeWidth={4}
         />
         <RnText
           style={[
-            atoms.text_xs,
+            compact ? atoms.text_2xs : atoms.text_xs,
             { color: colors.text, fontFamily: fonts.heavy.fontFamily },
           ]}
         >

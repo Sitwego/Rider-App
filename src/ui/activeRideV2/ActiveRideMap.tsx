@@ -241,7 +241,13 @@ const ActiveRideMapBase = forwardRef<ActiveRideMapHandle, Props>(
                 />
               ))}
               {destination && (
-                <DestinationMarker ride_duration={markerEta} {...destination} />
+                <DestinationMarker
+                  // Re-keyed so the native marker re-snapshots at the new size.
+                  key={expanded ? "destination" : "destination-compact"}
+                  ride_duration={markerEta}
+                  compact={!expanded}
+                  {...destination}
+                />
               )}
             </>
           )}
