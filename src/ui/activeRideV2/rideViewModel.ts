@@ -134,6 +134,8 @@ export type RideDetails = {
   distanceKm: number | null;
   otp: string | null;
   phone: string | null;
+  from: LocationInfo | undefined;
+  to: LocationInfo | undefined;
   destinationName: string | null;
   destination: { lat: number; lng: number } | null;
   arrivalTime: number | null;
@@ -172,6 +174,8 @@ export function deriveRideDetails(rideData: RideRequestData): RideDetails {
     distanceKm,
     otp: rideData.otp || null,
     phone: rideData.phone || null,
+    from: rideData.from,
+    to,
     destinationName: placeName(to),
     destination:
       to && Number.isFinite(to.lat) && Number.isFinite(to.lon)
