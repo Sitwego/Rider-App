@@ -22,7 +22,7 @@ import { RideStatusCard } from "./components/RideStatusCard";
 import { RideStatusHeader } from "./components/RideStatusHeader";
 import { TripActionsCard } from "./components/TripActionsCard";
 import { TripRouteCard } from "./components/TripRouteCard";
-import { ACCENT, CONTENT_GUTTER, useActiveRideGeometry } from "./geometry";
+import { CONTENT_GUTTER, useActiveRideGeometry } from "./geometry";
 import { RidePromoCarousel } from "./promo/RidePromoCarousel";
 import { usePromoSlides } from "./promo/usePromoSlides";
 import { useActiveRideLayout, type SettledMode } from "./useActiveRideLayout";
@@ -248,7 +248,11 @@ function ActiveRideScreenV2Body({ view }: { view: ActiveRideView }) {
           pointerEvents={state === "compact" ? "none" : "auto"}
           style={[
             styles.header,
-            { height: g.headerH, paddingTop: insets.top },
+            {
+              height: g.headerH,
+              paddingTop: insets.top,
+              backgroundColor: colors.bg_50,
+            },
             headerStyle,
           ]}
         >
@@ -290,6 +294,5 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: ACCENT,
   },
 });

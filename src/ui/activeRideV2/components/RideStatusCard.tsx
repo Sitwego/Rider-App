@@ -17,8 +17,6 @@ import { useAppTheme } from "~/ui/theme";
 import { atoms } from "~/ui/theme/atoms";
 import { space } from "~/ui/theme/tokens";
 
-import { ACCENT } from "../geometry";
-
 type Props = {
   label: string;
   headline: string;
@@ -107,7 +105,7 @@ function RideStatusCardBase({
               exiting={FadeOut.duration(120)}
               style={[
                 atoms.text_xl,
-                { color: ACCENT, fontFamily: fonts.heavy.fontFamily },
+                { color: colors.green_500, fontFamily: fonts.heavy.fontFamily },
               ]}
             >
               {headline}
@@ -128,7 +126,7 @@ function RideStatusCardBase({
 
         {otp ? (
           <RnView style={[styles.otp, { backgroundColor: colors.bg_100 }]}>
-            <Icon name="KeyRound" size={16} color={ACCENT} />
+            <Icon name="KeyRound" size={16} color={colors.green_500} />
             <RnText style={[atoms.text_sm, { color: colors.gray_300 }]}>
               Share OTP with your driver
             </RnText>

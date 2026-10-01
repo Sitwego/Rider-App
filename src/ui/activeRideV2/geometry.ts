@@ -4,9 +4,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { space } from "~/ui/theme/tokens";
 
-/** Brand accent for the v2 ride screen, until it is a theme token. */
-export const ACCENT = "#6b9f77";
-
 export const CONTENT_GUTTER = space.lg;
 const HEADER_BAR = 56;
 const SLOT_ASPECT = 10 / 16;

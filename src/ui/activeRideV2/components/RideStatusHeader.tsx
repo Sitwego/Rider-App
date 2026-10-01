@@ -15,7 +15,7 @@ type Props = {
 
 /** Accent bar shown above the expanded map; drag it down to collapse. */
 function RideStatusHeaderBase({ headline, onCollapse }: Props) {
-  const { fonts } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   return (
     <RnView style={styles.row}>
       <Pressable
@@ -25,7 +25,7 @@ function RideStatusHeaderBase({ headline, onCollapse }: Props) {
         accessibilityLabel="Collapse live map"
         style={styles.back}
       >
-        <Icon name="ChevronDown" size={26} color="white" />
+        <Icon name="ChevronDown" size={26} color={colors.text} />
       </Pressable>
       <Animated.Text
         key={headline}
@@ -35,7 +35,7 @@ function RideStatusHeaderBase({ headline, onCollapse }: Props) {
         style={[
           atoms.text_lg,
           styles.title,
-          { fontFamily: fonts.heavy.fontFamily },
+          { color: colors.text, fontFamily: fonts.heavy.fontFamily },
         ]}
       >
         {headline}
@@ -60,5 +60,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  title: { flex: 1, color: "white" },
+  title: { flex: 1 },
 });
