@@ -1,5 +1,3 @@
-import { useEffect, useState } from "react";
-
 import { featureFlagStorage } from "~/storage";
 
 import { toRidePhase } from "./rideViewModel";
@@ -7,27 +5,11 @@ import { toRidePhase } from "./rideViewModel";
 import type { RideRequestStatus } from "~/types/rideRequestStatus";
 
 // Local stand-in for the `active_ride_v2` Remote Config flag (not installed
-// yet). Default on: unset means v2; only an explicit `false` (dev toggle)
-// falls back to the old map + TrueSheet layout.
+// yet). Default on: unset means v2; only an explicit `false` falls back to
+// the old map + TrueSheet layout.
 
 export function isActiveRideV2Enabled(): boolean {
   return featureFlagStorage.get(["active_ride_v2"]) !== false;
-}
-
-export function setActiveRideV2Enabled(enabled: boolean): void {
-  featureFlagStorage.set(["active_ride_v2"], enabled);
-}
-
-export function useActiveRideV2Enabled(): boolean {
-  const [enabled, setEnabled] = useState(isActiveRideV2Enabled);
-  useEffect(() => {
-    const listener = featureFlagStorage.addOnValueChangedListener(
-      ["active_ride_v2"],
-      (value) => setEnabled(value !== false),
-    );
-    return () => listener.remove();
-  }, []);
-  return enabled;
 }
 
 /**

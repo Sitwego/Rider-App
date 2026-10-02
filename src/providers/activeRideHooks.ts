@@ -14,7 +14,6 @@ import {
   strartWatchingLocationChanges as startWatchingLocationChanges,
 } from "~/lib/native";
 import { navigateRef } from "~/navigation";
-import { isMockRideId } from "~/ui/activeRideV2/dev/mockRideId";
 import { usesActiveRideV2 } from "~/ui/activeRideV2/flags";
 import { getCoordinatesFromLineStr } from "~/utils/geo";
 
@@ -118,8 +117,7 @@ export function useLocationUpdates(
   setActiveRideState: ActionDispatch<[action: Action]>,
 ) {
   useEffect(() => {
-    // Dev mock rides feed locations from JS; there is no ride to stream.
-    if (!activeRideId || isMockRideId(activeRideId)) return;
+    if (!activeRideId) return;
     startWatchingLocationChanges(activeRideId);
     return () => {
       console.log("Stopping location changes for ride:", activeRideId);

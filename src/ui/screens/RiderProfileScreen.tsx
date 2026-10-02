@@ -7,7 +7,6 @@ import Icon from "~/components/Icons";
 import { useGetRiderProfile, useLinkGoogleAccount } from "~/hooks/useUserApis";
 import { useAuthApi } from "~/providers/AuthProvider";
 import { s } from "~/styles/Common-Styles";
-import { ActiveRideDevTools } from "~/ui/activeRideV2/dev/ActiveRideDevTools";
 
 import Avatar from "../Avatar";
 import RnText from "../RnText";
@@ -359,8 +358,6 @@ export const RiderProfileScreen: React.FC<Props> = ({ navigation }) => {
             </RnView>
           </RnView>
         </PressableScale>
-
-        {__DEV__ && <ActiveRideDevTools />}
 
         {/* Actions */}
         <RnView
