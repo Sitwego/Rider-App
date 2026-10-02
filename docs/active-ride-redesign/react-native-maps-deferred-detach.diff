@@ -1,0 +1,82 @@
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java	1985-10-26 11:15:00.000000000 +0300
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java	2026-09-27 12:04:15.023251700 +0300
+@@ -14,6 +14,8 @@
+ import androidx.lifecycle.LifecycleOwner;
+ 
+ import android.os.Bundle;
++import android.os.Handler;
++import android.os.Looper;
+ import android.util.Log;
+ import android.view.GestureDetector;
+ import android.view.MotionEvent;
+@@ -151,6 +153,24 @@
+     private final Map<TileOverlay, MapGradientPolyline> gradientPolylineMap = new HashMap<>();
+     private final GestureDetector gestureDetector;
+     private boolean paused = false;
++
++    // Re-parenting (e.g. a portal moving this view between hosts) detaches and
++    // re-attaches within a frame or two. Tearing the map down on every detach
++    // re-creates the GoogleMap without destroying the old one (leak) and can
++    // drop features when a second detach lands before the async restore.
++    // Teardown is deferred and cancelled by a quick re-attach.
++    private static final long DETACH_TEARDOWN_DELAY_MS = 500;
++    private final Handler detachHandler = new Handler(Looper.getMainLooper());
++    private boolean detachTeardownPending = false;
++    private final Runnable detachTeardown = new Runnable() {
++        @Override
++        public void run() {
++            detachTeardownPending = false;
++            if (!destroyed) {
++                performDetachTeardown();
++            }
++        }
++    };
+     private boolean destroyed = false;
+     private final ThemedReactContext context;
+     private final FusedLocationSource fusedLocationSource;
+@@ -320,6 +340,12 @@
+     protected void onAttachedToWindow() {
+         super.onAttachedToWindow();
+ 
++        if (detachTeardownPending) {
++            detachHandler.removeCallbacks(detachTeardown);
++            detachTeardownPending = false;
++            return;
++        }
++
+         // Reset lifecycle flags when reattaching
+         synchronized (this) {
+             paused = false;
+@@ -349,6 +375,15 @@
+     // Override onDetachedFromWindow to detach lifecycle observer
+     @Override
+     protected void onDetachedFromWindow() {
++        super.onDetachedFromWindow();
++        if (destroyed) {
++            return;
++        }
++        detachTeardownPending = true;
++        detachHandler.postDelayed(detachTeardown, DETACH_TEARDOWN_DELAY_MS);
++    }
++
++    private void performDetachTeardown() {
+         synchronized (this) {
+             // Save instance state if not already saved and map is ready
+             if (map != null && isMapReady) {
+@@ -382,7 +417,6 @@
+         shouldRestorePadding = true;
+         removeView(attacherGroup);
+         attacherGroup = null;
+-        super.onDetachedFromWindow();
+         detachLifecycleObserver();
+     }
+ 
+@@ -785,6 +819,8 @@
+             return;
+         }
+         destroyed = true;
++        detachHandler.removeCallbacks(detachTeardown);
++        detachTeardownPending = false;
+         savedMapState = null;
+         savedFeatures = null;
+         try {

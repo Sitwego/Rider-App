@@ -1,6 +1,6 @@
 # 02 — Transition Spike (Android only)
 
-**Step:** Prompt 2 · **Spike branch:** `spike/active-ride-transition` (worktree at `../mobility-customer-spike`, **not for merge**) · **Scope:** Android only.
+**Step:** Prompt 2 · **Spike code:** archived on the local tag `archive/spike-active-ride-transition` (never merged or pushed) · **Scope:** Android only.
 
 ## Decision: **Path A (in-place morph)**
 
@@ -71,7 +71,7 @@ The problem is in `node_modules/react-native-maps/android/src/main/java/com/rnma
    - `onCreate` builds a **new GoogleMap, but the old one is never `onDestroy`'d**. That's the ~30 MB-per-cycle Java-heap leak and the OutOfMemoryError.
 3. **`react-native-teleport` detaches and re-attaches the view several times per transition** (host → overlay → host). A second detach that lands before the async `getMapAsync` restore runs `savedFeatures = new ArrayList<>(features)` on the *already-cleared* list. **The markers and polylines are then gone for good.**
 
-**The patch.** A spike-quality patch, kept at `src/spike/activeRideTransition/react-native-maps-deferred-detach.diff` on the spike branch:
+**The patch.** A spike-quality patch, kept at [`react-native-maps-deferred-detach.diff`](./react-native-maps-deferred-detach.diff) in this folder:
 - `onDetachedFromWindow` now only schedules the teardown 500 ms later.
 - `onAttachedToWindow` cancels a pending teardown and keeps the live GoogleMap.
 - `doDestroy` cancels it too.
@@ -104,7 +104,7 @@ Other notes for later prompts:
 - **Prompt 6, POIs:** the thumbnail and expanded map show POIs (Shell, schools). `showsPointsOfInterests` is iOS-only, so hiding them on Android needs a POI rule in `CUSTOMSTYLE`, or a compact-only style.
 - **Prompt 6, marker size:** the production car marker is large next to a roughly 160 dp thumbnail and gets clipped at the crop edge. Consider a smaller marker in compact mode, or padding sized to the marker.
 - **Prompt 7, flick gestures:** adb-injected "flicks" end with near-zero release velocity, so the velocity projection needs a human-finger check.
-- **Prompt 11, measurement:** the frame meter in `metrics.ts` and the adb driver script in the scratchpad (`spike.sh`: `tap_text`, `hud`) are reusable for the C7–C11 contract runs.
+- **Prompt 11, measurement:** the frame meter in `metrics.ts` (on the archive tag) and the adb driver [`tools/adb-ui-driver.sh`](./tools/adb-ui-driver.sh) are reusable for the C7–C11 contract runs. See [03-testing.md](./03-testing.md).
 
 ## Why not patched Path B?
 Patched, Path B is viable and has slightly better frame numbers than Path A. It still loses on every other axis:
@@ -116,7 +116,7 @@ Patched, Path B is viable and has slightly better frame numbers than Path A. It 
 
 Its real advantage, route semantics (a back-stack entry and deep links), can be had in Path A with a route param and `BackHandler`.
 
-## What was built (spike branch)
+## What was built (archive tag)
 - `src/spike/activeRideTransition/`:
   - `SpikeMap.tsx`: the shared fixed-size map, with `fit(mode)`.
   - `PathAScreen.tsx`: the morph. `progress` is the single source of truth. The clip container follows the scroll-adjusted slot on the UI thread; the spring and header pan use velocity handoff; hardware back and the HUD test actions are wired.
@@ -125,9 +125,8 @@ Its real advantage, route semantics (a back-stack entry and deep links), can be 
   - `SpikeNavigator.tsx`: the pre-auth spike menu.
 - Pinned versions: `react-native-screen-choreography@0.6.4` and `react-native-teleport@1.2.2`. Both compile and run against RN 0.85.3 with the New Architecture.
 - Dev flavor `applicationIdSuffix ".dev"` (spike only), so it installs side by side. Firebase already has a `.dev` client, and the Maps key accepts it.
-- The spike worktree's `node_modules/react-native-maps` currently holds the **patched** `MapView.java`. It's applied by hand, not through patch-package, so any `yarn install` in the worktree reverts it. The APK built from stock react-native-maps is saved in the session scratchpad.
+- The react-native-maps patch was applied by hand to `node_modules` (not through patch-package). To re-test Path B, apply the diff in this folder after `yarn install`.
 
-## Cleanup
-- On the phone: `adb uninstall com.transli.mobilitycustomer.dev`. That removes only the spike app; the Play Store app is separate.
-- In the repo: `git worktree remove ../mobility-customer-spike && git branch -D spike/active-ride-transition`. Neither has been pushed or merged.
-- Keep the spike until Prompt 7 is done if you want to re-run its measurements against the real implementation.
+## Re-running the spike
+- `git checkout archive/spike-active-ride-transition` (or `git worktree add --detach ../mobility-customer-spike archive/spike-active-ride-transition`), then `yarn install` and a `devRelease` build. The spike boots straight into its menu (`SPIKE_BOOT`).
+- The spike test app installs as `com.transli.mobilitycustomer.dev`; `adb uninstall com.transli.mobilitycustomer.dev` removes it without touching the Play Store app.
