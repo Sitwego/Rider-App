@@ -16,6 +16,12 @@ export type ActiveRideSchema = {
   active_ride: Omit<ActiveRideState, "should_persist">;
 };
 
+export type FeatureFlagSchema = {
+  active_ride_v2: boolean;
+  /** Layout chosen when the current ride started; kept for that ride. */
+  active_ride_v2_latch: { rideId: string; v2: boolean };
+};
+
 /**
  * Generic storage class. DO NOT use this directly. Instead, use the exported
  * storage instances below.
@@ -111,4 +117,8 @@ export const userProfileStorage = new Storage<[], UserProfileSchema>(
 
 export const activeRideStorage = new Storage<[], ActiveRideSchema>(
   ACTIVE_RIDE_STORAGE_KEY,
+);
+
+export const featureFlagStorage = new Storage<[], FeatureFlagSchema>(
+  "feature_flags",
 );
